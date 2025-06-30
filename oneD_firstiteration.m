@@ -1,0 +1,3 @@
+clear
+close
+close all
