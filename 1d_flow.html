@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1D Flow Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        .slider-label {
+            @apply w-28 text-sm text-gray-600 text-right pr-4;
+        }
+        .slider-value {
+            @apply w-16 text-sm font-medium text-gray-800;
+        }
+        .control-group {
+            @apply flex items-center mb-4;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 lg:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Controls Panel -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                <h1 class="text-2xl font-bold mb-6 text-gray-900">1D Flow Simulation</h1>
+
+                <!-- Simulation Type -->
+                <div class="mb-6">
+                    <label class="block text-md font-semibold text-gray-700 mb-2">Simulation Type</label>
+                    <div class="flex bg-gray-200 rounded-lg p-1">
+                        <button id="particleButton" class="flex-1 py-2 px-4 rounded-md text-sm font-semibold focus:outline-none transition-colors duration-200 bg-white text-blue-600 shadow">Particle</button>
+                        <button id="fibreButton" class="flex-1 py-2 px-4 rounded-md text-sm font-semibold focus:outline-none transition-colors duration-200 text-gray-600">Fibre</button>
+                    </div>
+                </div>
+
+                <!-- Sliders -->
+                <div class="space-y-5">
+                    <div id="l-slider-group" class="control-group">
+                        <label for="l-slider" class="slider-label">L (mm)</label>
+                        <input type="range" id="l-slider" min="10" max="200" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="l-value" class="slider-value text-right">100</span>
+                    </div>
+                    <div id="vp-slider-group" class="control-group">
+                        <label for="vp-slider" class="slider-label">Vp</label>
+                        <input type="range" id="vp-slider" min="0.1" max="0.9" value="0.5" step="0.01" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="vp-value" class="slider-value text-right">0.50</span>
+                    </div>
+                    <div id="dp-slider-group" class="control-group">
+                        <label for="dp-slider" class="slider-label">Dp (μm)</label>
+                        <input type="range" id="dp-slider" min="1" max="200" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="dp-value" class="slider-value text-right">50</span>
+                    </div>
+                    <div id="mu-slider-group" class="control-group">
+                        <label for="mu-slider" class="slider-label">μ (Pa.s)</label>
+                        <input type="range" id="mu-slider" min="0.1" max="5" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="mu-value" class="slider-value text-right">1.0</span>
+                    </div>
+                    <div id="p-slider-group" class="control-group">
+                        <label for="p-slider" class="slider-label">P (kPa)</label>
+                        <input type="range" id="p-slider" min="10" max="500" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="p-value" class="slider-value text-right">100</span>
+                    </div>
+                </div>
+
+                <!-- Numeric Inputs -->
+                <div class="mt-8 grid grid-cols-2 gap-4">
+                     <div>
+                        <label for="k-input" class="block text-sm font-medium text-gray-700">K (m²)</label>
+                        <input type="number" id="k-input" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                    <div>
+                        <label for="phi-input" class="block text-sm font-medium text-gray-700">phi (porosity)</label>
+                        <input type="number" id="phi-input" value="0.5" class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="mt-8 grid grid-cols-2 gap-4">
+                    <button id="startButton" class="w-full bg-blue-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-md">Start</button>
+                    <button id="pauseButton" class="w-full bg-gray-500 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-all duration-200 shadow-md" disabled>Pause</button>
+                </div>
+            </div>
+
+            <!-- Display Area -->
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-4 rounded-xl shadow-lg">
+                    <h2 id="simulationTitle" class="text-lg font-semibold text-center mb-2 text-gray-800">Adjust sliders and press Start</h2>
+                    <canvas id="simulationCanvas" class="w-full rounded-lg"></canvas>
+                </div>
+                <div class="bg-white p-4 rounded-xl shadow-lg">
+                     <h2 class="text-lg font-semibold text-center mb-2 text-gray-800">Pressure vs. Distance</h2>
+                    <canvas id="pressureCanvas" class="w-full"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Element References ---
+        const getEl = (id) => document.getElementById(id);
+        const elements = {
+            particleButton: getEl('particleButton'),
+            fibreButton: getEl('fibreButton'),
+            lSlider: getEl('l-slider'),
+            vpSlider: getEl('vp-slider'),
+            dpSlider: getEl('dp-slider'),
+            muSlider: getEl('mu-slider'),
+            pSlider: getEl('p-slider'),
+            lValue: getEl('l-value'),
+            vpValue: getEl('vp-value'),
+            dpValue: getEl('dp-value'),
+            muValue: getEl('mu-value'),
+            pValue: getEl('p-value'),
+            kInput: getEl('k-input'),
+            phiInput: getEl('phi-input'),
+            startButton: getEl('startButton'),
+            pauseButton: getEl('pauseButton'),
+            simulationCanvas: getEl('simulationCanvas'),
+            pressureCanvas: getEl('pressureCanvas'),
+            simulationTitle: getEl('simulationTitle'),
+        };
+
+        // --- State Variables ---
+        let simState = {
+            type: 'particle', // 'particle' or 'fibre'
+            isRunning: false,
+            isPaused: false,
+            restartRequested: false,
+            isUpdating: false, // Prevents recursive updates
+            animationFrameId: null,
+            startTime: 0,
+            pauseTime: 0,
+        };
+
+        // --- Canvas and Chart Setup ---
+        const simCtx = elements.simulationCanvas.getContext('2d');
+        let pressureChart;
+
+        // --- Constants ---
+        const halfHeight = 0.2; // m
+        const fibreSpacingX = 0.01; // m
+        const fibreSpacingY = 0.01; // m
+
+        // --- Core Functions ---
+
+        /**
+         * Updates the display of fibres/particles on the main canvas.
+         * This is the equivalent of MATLAB's updateFibres function.
+         */
+        function updateFibres() {
+            const L = parseFloat(elements.lSlider.value) * 1e-3; // m
+            const phi = parseFloat(elements.phiInput.value);
+
+            // Set canvas dimensions based on aspect ratio
+            const canvasWidth = elements.simulationCanvas.clientWidth;
+            const canvasHeight = (canvasWidth * (2 * halfHeight)) / L;
+            elements.simulationCanvas.width = canvasWidth;
+            elements.simulationCanvas.height = canvasHeight;
+
+            simCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+            
+            // Draw composite section background
+            simCtx.fillStyle = '#E5E7EB'; // gray-200
+            simCtx.strokeStyle = '#1F2937'; // gray-800
+            simCtx.lineWidth = 1.5;
+            simCtx.fillRect(0, 0, canvasWidth, canvasHeight);
+            simCtx.strokeRect(0, 0, canvasWidth, canvasHeight);
+
+            // Calculate fibre properties
+            const numFibresX = Math.floor(L / fibreSpacingX);
+            const numFibresY = Math.floor(2 * halfHeight / fibreSpacingY);
+            if (numFibresX <= 0 || numFibresY <= 0) return;
+
+            const cellWidth = L / numFibresX;
+            const maxRadius = (cellWidth / 2) * 0.9;
+            const radius = maxRadius * Math.sqrt(1 - phi);
+
+            // Draw fibres/particles
+            simCtx.fillStyle = '#6B7280'; // gray-500
+            const x_centers = Array.from({ length: numFibresX }, (_, i) => cellWidth / 2 + i * cellWidth);
+            const y_centers = Array.from({ length: numFibresY }, (_, i) => fibreSpacingY / 2 + i * fibreSpacingY);
+
+            for (let i = 0; i < numFibresX; i++) {
+                for (let j = 0; j < numFibresY; j++) {
+                    const x_pos_m = x_centers[i];
+                    const y_pos_m = y_centers[j];
+                    
+                    // Convert meters to canvas pixels
+                    const x_px = (x_pos_m / L) * canvasWidth;
+                    const y_px = (y_pos_m / (2 * halfHeight)) * canvasHeight;
+                    const radius_px = (radius / L) * canvasWidth;
+
+                    simCtx.beginPath();
+                    simCtx.arc(x_px, y_px, radius_px, 0, 2 * Math.PI);
+                    simCtx.fill();
+                }
+            }
+            updatePressureChart(0); // Reset pressure chart
+        }
+
+        /**
+         * Updates the pressure chart based on the flow front position.
+         * @param {number} x_front - The position of the flow front in meters.
+         */
+        function updatePressureChart(x_front) {
+            const L = parseFloat(elements.lSlider.value) * 1e-3;
+            const Pin = parseFloat(elements.pSlider.value);
+
+            const data = {
+                labels: [0, x_front, L],
+                datasets: [{
+                    label: 'Pressure (kPa)',
+                    data: [Pin, 0, 0],
+                    borderColor: '#1F2937', // gray-800
+                    backgroundColor: 'transparent',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    tension: 0 // Makes lines straight
+                }]
+            };
+
+            if (!pressureChart) {
+                const config = {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: {
+                                    display: true,
+                                    text: 'Position along composite (m)'
+                                },
+                                min: 0,
+                                max: L
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Pressure (kPa)'
+                                },
+                                min: 0,
+                                max: Pin * 1.1 // Add some padding
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false }
+                        }
+                    }
+                };
+                pressureChart = new Chart(elements.pressureCanvas, config);
+            } else {
+                pressureChart.data = data;
+                pressureChart.options.scales.x.max = L;
+                pressureChart.options.scales.y.max = Pin * 1.1;
+                pressureChart.update('none'); // 'none' for no animation
+            }
+        }
+
+        /**
+         * Calculates K (permeability) and phi (porosity) from Vp and Dp.
+         */
+        function updateKphiFromVpDp() {
+            if (simState.isUpdating) return;
+            simState.isUpdating = true;
+
+            const Vp = parseFloat(elements.vpSlider.value);
+            const Dp = parseFloat(elements.dpSlider.value) * 1e-6; // convert μm to m
+            let phi, K;
+
+            if (simState.type === 'particle') {
+                phi = 1 - Vp;
+                K = Math.pow(1 - Vp, 3) / (4.2 * Math.pow(6 * Vp / Dp, 2));
+            } else { // fibre
+                phi = 1 - Vp;
+                K = (Dp * Dp * Math.pow(1 - Vp, 3)) / (150 * Vp);
+            }
+            
+            elements.phiInput.value = phi.toExponential(3);
+            elements.kInput.value = K.toExponential(3);
+            
+            simState.isUpdating = false;
+        }
+
+        /**
+         * Calculates Vp and Dp from K and phi.
+         */
+        function updateVpDpFromKphi() {
+            if (simState.isUpdating) return;
+            simState.isUpdating = true;
+
+            const phi = parseFloat(elements.phiInput.value);
+            const K = parseFloat(elements.kInput.value);
+            let Vp, Dp;
+
+            if (simState.type === 'particle') {
+                Vp = 1 - phi;
+                Dp = Math.sqrt((K * 4.2 * 36 * Vp * Vp) / Math.pow(1 - Vp, 3));
+            } else { // fibre
+                Vp = 1 - phi;
+                Dp = Math.sqrt((K * 150 * Vp) / Math.pow(1 - Vp, 3));
+            }
+
+            elements.vpSlider.value = Vp.toFixed(2);
+            elements.vpValue.textContent = Vp.toFixed(2);
+            elements.dpSlider.value = (Dp * 1e6).toFixed(0); // convert m to μm
+            elements.dpValue.textContent = (Dp * 1e6).toFixed(0);
+            
+            simState.isUpdating = false;
+        }
+
+        /**
+         * Main animation loop.
+         * @param {number} timestamp - The current time from requestAnimationFrame.
+         */
+        function animationLoop(timestamp) {
+            if (simState.restartRequested) {
+                stopAnimation();
+                startAnimation();
+                return;
+            }
+            if (simState.isPaused) {
+                simState.animationFrameId = requestAnimationFrame(animationLoop);
+                return;
+            }
+
+            if (simState.startTime === 0) {
+                simState.startTime = timestamp;
+            }
+            const elapsedTime = (timestamp - simState.startTime) / 1000; // seconds
+
+            // --- Get current parameters ---
+            const L = parseFloat(elements.lSlider.value) * 1e-3;
+            const K = parseFloat(elements.kInput.value);
+            const phi = parseFloat(elements.phiInput.value);
+            const mu = parseFloat(elements.muSlider.value);
+            const Pin = parseFloat(elements.pSlider.value) * 1e3; // Pa
+            const deltaP = Pin;
+
+            // --- Darcy's Law Calculation ---
+            const const_term = (2 * K * deltaP) / (mu * phi);
+            let x_front = Math.sqrt(const_term * elapsedTime);
+
+            let isFinished = false;
+            if (x_front >= L) {
+                x_front = L;
+                isFinished = true;
+            }
+            
+            // --- Drawing ---
+            updateFibres(); // Redraw background and fibres
+
+            // Draw filled region
+            const canvasWidth = elements.simulationCanvas.width;
+            const canvasHeight = elements.simulationCanvas.height;
+            const front_px = (x_front / L) * canvasWidth;
+            
+            simCtx.fillStyle = 'rgba(59, 130, 246, 0.4)'; // blue-500 with alpha
+            simCtx.fillRect(0, 0, front_px, canvasHeight);
+
+            // Draw flow front line
+            simCtx.strokeStyle = '#EF4444'; // red-500
+            simCtx.lineWidth = 3;
+            simCtx.beginPath();
+            simCtx.moveTo(front_px, 0);
+            simCtx.lineTo(front_px, canvasHeight);
+            simCtx.stroke();
+            
+            // --- Update UI ---
+            const fill_percentage = (x_front / L) * 100;
+            const time_hrs = elapsedTime / 3600;
+            elements.simulationTitle.textContent = `Time: ${time_hrs.toFixed(2)} hrs | Fill: ${fill_percentage.toFixed(1)}%`;
+            updatePressureChart(x_front);
+
+            // --- Loop Control ---
+            if (isFinished) {
+                stopAnimation();
+                elements.simulationTitle.textContent += ' | Animation Complete';
+            } else {
+                simState.animationFrameId = requestAnimationFrame(animationLoop);
+            }
+        }
+
+        function startAnimation() {
+            if (simState.isRunning) {
+                simState.restartRequested = true;
+                if(simState.isPaused) { // If paused and restart is clicked
+                    togglePause();
+                }
+                return;
+            }
+            
+            simState.isRunning = true;
+            simState.restartRequested = false;
+            simState.isPaused = false;
+            simState.startTime = 0;
+            simState.pauseTime = 0;
+            
+            elements.startButton.textContent = 'Restart';
+            elements.pauseButton.textContent = 'Pause';
+            elements.pauseButton.disabled = false;
+            
+            simState.animationFrameId = requestAnimationFrame(animationLoop);
+        }
+
+        function stopAnimation() {
+            if (simState.animationFrameId) {
+                cancelAnimationFrame(simState.animationFrameId);
+            }
+            simState.isRunning = false;
+            simState.isPaused = false;
+            elements.startButton.textContent = 'Start';
+            elements.pauseButton.textContent = 'Pause';
+            elements.pauseButton.disabled = true;
+        }
+
+        function togglePause() {
+            if (!simState.isRunning) return;
+            
+            simState.isPaused = !simState.isPaused;
+            if (simState.isPaused) {
+                elements.pauseButton.textContent = 'Resume';
+                simState.pauseTime = performance.now();
+            } else {
+                elements.pauseButton.textContent = 'Pause';
+                // Adjust start time to account for the pause duration
+                simState.startTime += (performance.now() - simState.pauseTime);
+            }
+        }
+
+        // --- Event Listeners ---
+        function handleSliderChange(e, valueEl, precision = 0) {
+            valueEl.textContent = parseFloat(e.target.value).toFixed(precision);
+            updateKphiFromVpDp();
+            updateFibres();
+            if (simState.isRunning) {
+                simState.restartRequested = true;
+            }
+        }
+        
+        function handleInputChange() {
+            updateVpDpFromKphi();
+            updateFibres();
+            if (simState.isRunning) {
+                simState.restartRequested = true;
+            }
+        }
+
+        elements.lSlider.addEventListener('input', (e) => {
+            elements.lValue.textContent = e.target.value;
+        });
+        elements.lSlider.addEventListener('change', () => {
+             updateFibres();
+             if (simState.isRunning) simState.restartRequested = true;
+        });
+        
+        elements.vpSlider.addEventListener('input', (e) => handleSliderChange(e, elements.vpValue, 2));
+        elements.dpSlider.addEventListener('input', (e) => handleSliderChange(e, elements.dpValue, 0));
+        elements.muSlider.addEventListener('input', (e) => handleSliderChange(e, elements.muValue, 1));
+        elements.pSlider.addEventListener('input', (e) => handleSliderChange(e, elements.pValue, 0));
+        
+        elements.kInput.addEventListener('change', handleInputChange);
+        elements.phiInput.addEventListener('change', handleInputChange);
+
+        elements.startButton.addEventListener('click', startAnimation);
+        elements.pauseButton.addEventListener('click', togglePause);
+
+        elements.particleButton.addEventListener('click', () => {
+            simState.type = 'particle';
+            elements.particleButton.classList.add('bg-white', 'text-blue-600', 'shadow');
+            elements.fibreButton.classList.remove('bg-white', 'text-blue-600', 'shadow');
+            updateKphiFromVpDp();
+            updateFibres();
+            if (simState.isRunning) simState.restartRequested = true;
+        });
+
+        elements.fibreButton.addEventListener('click', () => {
+            simState.type = 'fibre';
+            elements.fibreButton.classList.add('bg-white', 'text-blue-600', 'shadow');
+            elements.particleButton.classList.remove('bg-white', 'text-blue-600', 'shadow');
+            updateKphiFromVpDp();
+            updateFibres();
+            if (simState.isRunning) simState.restartRequested = true;
+        });
+        
+        window.addEventListener('resize', () => {
+            if(!simState.isRunning) {
+                updateFibres();
+            } else {
+                // A resize during animation could be handled more gracefully,
+                // but for now we'll just flag a restart.
+                simState.restartRequested = true;
+            }
+        });
+
+        // --- Initial Setup ---
+        function initialize() {
+            // Set initial slider values text
+            elements.lValue.textContent = elements.lSlider.value;
+            elements.vpValue.textContent = parseFloat(elements.vpSlider.value).toFixed(2);
+            elements.dpValue.textContent = elements.dpSlider.value;
+            elements.muValue.textContent = parseFloat(elements.muSlider.value).toFixed(1);
+            elements.pValue.textContent = elements.pSlider.value;
+            
+            updateKphiFromVpDp();
+            updateFibres();
+        }
+
+        initialize();
+
+    </script>
+</body>
+</html>
