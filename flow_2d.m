@@ -180,48 +180,71 @@ disp('Tracing flow front...');
 figure; % Create a new figure for the animation
 hold on;
 title('Flow Front Animation');
-rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderRadius, 2*cylinderRadius, 2*cylinderRadius], 'Curvature', [1 1], 'FaceColor', 'w');
 xlabel('x'); ylabel('y');
+rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderRadius, 2*cylinderRadius, 2*cylinderRadius], 'Curvature', [1 1], 'FaceColor', 'w');
 axis equal; axis([0 channelLength 0 channelHeight]);
-
-% Define the initial line of particles (the "front")
-num_points = 100;
-initialX = zeros(1, num_points);
-initialY = linspace(0, channelHeight, num_points);
-points = [initialX; initialY]; % 2xN matrix of particle positions
-
-% Plot the initial front
-h_front = plot(points(1,:), points(2,:), 'k.', 'MarkerSize', 10);
 
 % Time integration parameters
 dt = 0.2;
-t = 0;
 max_time = 200;
-maxX = max(points(1,:));
-
-while maxX < channelLength && t < max_time
-    % Get the x and y coordinates of the current points
-    queryX = points(1,:);
-    queryY = points(2,:);
+for i = 1:10
+    % Define the initial line of particles (the "front")
+    t = 0;
+    num_points = 100;
+    initialX = zeros(1, num_points);
+    initialY = linspace(0, channelHeight, num_points);
+    points = [initialX; initialY]; % 2xN matrix of particle positions
     
-    % Interpolate the velocity field at the particle locations
-    % Use the correct interp2 syntax: interp2(X, Y, V, Xq, Yq)
-    velX = interp2(X, Y, Ux_grid, queryX, queryY, 'linear', 0);
-    velY = interp2(X, Y, Uy_grid, queryX, queryY, 'linear', 0);
+    % Define max distance for connecting lines
+    initial_spacing = channelHeight / (num_points - 1);
+    max_line_distance = 2.5 * initial_spacing;
     
-    % Update particle positions using Euler integration
-    points = points + [velX; velY] * dt;
-    
-    % Update the plot with the new front position
-    set(h_front, 'XData', points(1,:), 'YData', points(2,:));
-    drawnow; % Force MATLAB to update the figure window
-    
-    % Update loop conditions
+    % Plot the initial front with lines and markers
+    h_front = plot(points(1,:), points(2,:), 'b.-', 'MarkerSize', 8);
     maxX = max(points(1,:));
-    t = t + dt;
+    while maxX < channelLength && t < max_time
+        % Get the x and y coordinates of the current points
+        queryX = points(1,:);
+        queryY = points(2,:);
+        
+        % Interpolate the velocity field at the particle locations
+        velX = interp2(X, Y, Ux_grid, queryX, queryY, 'linear', 0);
+        velY = interp2(X, Y, Uy_grid, queryX, queryY, 'linear', 0);
+        
+        % Update particle positions using Euler integration
+        points = points + [velX; velY] * dt;
+        
+        % --- Logic to break lines that are too long ---
+        % Calculate the distance between adjacent points
+        point_diffs = diff(points, 1, 2);
+        distances = sqrt(sum(point_diffs.^2, 1));
+        
+        % Find indices where the line should break
+        break_indices = find(distances > max_line_distance);
+        
+        % Create new data with NaNs inserted at the break points
+        plotX = points(1,:);
+        plotY = points(2,:);
+        
+        % Insert NaNs to break the line. We shift the indices by 1 because
+        % diff reduces the array size by 1.
+        for idx = fliplr(break_indices) % Go backwards to not mess up indices
+            plotX = [plotX(1:idx), NaN, plotX(idx+1:end)];
+            plotY = [plotY(1:idx), NaN, plotY(idx+1:end)];
+        end
+        
+        % Update the plot with the new front position
+        set(h_front, 'XData', plotX, 'YData', plotY);
+        drawnow; % Force MATLAB to update the figure window
+        
+        % Update loop conditions
+        maxX = max(points(1,:));
+        t = t + dt;
+    end
 end
 hold off;
 disp('Flow front tracing complete.');
+
 
 disp('End of script.');
 
