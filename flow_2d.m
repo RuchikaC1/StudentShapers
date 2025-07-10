@@ -27,9 +27,9 @@ Re = 1;              % Reynolds number (moderate value for vortex shedding)
 inletVelocity = 0.1;   % Inlet velocity in the x-direction
 channelHeight = 20;   % Height of the computational domain
 channelLength = 20;    % Length of the computational domain
-cylinderRadius = 0.5;  % Radius of the cylinder
-cylinderCenterX = 4.5; % x-coordinate of the cylinder center
-cylinderCenterY = 2; % y-coordinate of the cylinder center
+cylinderRadius = 2;  % Radius of the cylinder
+cylinderCenterX = 10; % x-coordinate of the cylinder center
+cylinderCenterY = 10; % y-coordinate of the cylinder center
 simulationTime = 20;   % Total simulation time
 timeStep = 0.1;        % Time step size
 
@@ -158,10 +158,10 @@ Uy_grid = -psi_gradx_grid;
 Ux_grid(isnan(Ux_grid)) = 0;
 Uy_grid(isnan(Uy_grid)) = 0;
 
-% Mask out the cylinder region for plotting
-in_cylinder = (X - cylinderCenterX).^2 + (Y - cylinderCenterY).^2 < cylinderRadius^2;
-Ux_grid(in_cylinder) = NaN;
-Uy_grid(in_cylinder) = NaN;
+% % Mask out the cylinder region for plotting
+% in_cylinder = (X - cylinderCenterX).^2 + (Y - cylinderCenterY).^2 < cylinderRadius^2;
+% Ux_grid(in_cylinder) = NaN;
+% Uy_grid(in_cylinder) = NaN;
 
 % Plot Velocity Magnitude (Contourf)
 velocity_magnitude = sqrt(Ux_grid.^2 + Uy_grid.^2);
@@ -174,6 +174,56 @@ xlabel('x');
 ylabel('y');
 axis equal;
 axis([0 channelLength 0 channelHeight]);
+
+% 10. --- Flow Front Tracing ---
+disp('Tracing flow front...');
+figure; % Create a new figure for the animation
+hold on;
+title('Flow Front Animation');
+rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderRadius, 2*cylinderRadius, 2*cylinderRadius], 'Curvature', [1 1], 'FaceColor', 'w');
+xlabel('x'); ylabel('y');
+axis equal; axis([0 channelLength 0 channelHeight]);
+
+% Define the initial line of particles (the "front")
+num_points = 100;
+initialX = zeros(1, num_points);
+initialY = linspace(0, channelHeight, num_points);
+points = [initialX; initialY]; % 2xN matrix of particle positions
+
+% Plot the initial front
+h_front = plot(points(1,:), points(2,:), 'k.', 'MarkerSize', 10);
+
+% Time integration parameters
+dt = 0.2;
+t = 0;
+max_time = 200;
+maxX = max(points(1,:));
+
+while maxX < channelLength && t < max_time
+    % Get the x and y coordinates of the current points
+    queryX = points(1,:);
+    queryY = points(2,:);
+    
+    % Interpolate the velocity field at the particle locations
+    % Use the correct interp2 syntax: interp2(X, Y, V, Xq, Yq)
+    velX = interp2(X, Y, Ux_grid, queryX, queryY, 'linear', 0);
+    velY = interp2(X, Y, Uy_grid, queryX, queryY, 'linear', 0);
+    
+    % Update particle positions using Euler integration
+    points = points + [velX; velY] * dt;
+    
+    % Update the plot with the new front position
+    set(h_front, 'XData', points(1,:), 'YData', points(2,:));
+    drawnow; % Force MATLAB to update the figure window
+    
+    % Update loop conditions
+    maxX = max(points(1,:));
+    t = t + dt;
+end
+hold off;
+disp('Flow front tracing complete.');
+
+disp('End of script.');
 
 % --- Local Function for PDE Coefficients ---
 function fMatrix = fCoeffFunc(region, state)
