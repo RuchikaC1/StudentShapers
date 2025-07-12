@@ -123,9 +123,6 @@ results = solvepde(model, tlist);
 disp('Solution complete.');
 
 % 9. --- Post-processing and Visualization ---
-disp('Visualizing results...');
-figure('Units', 'normalized', 'Position', [0.1 0.1 0.8 0.7]);
-sgtitle('Fluid Flow Around a Cylinder Simulation');
 
 % Get the solution at the final time step
 finalSolution = results.NodalSolution(:, :, end)';
@@ -164,16 +161,19 @@ Uy_grid(isnan(Uy_grid)) = 0;
 % Uy_grid(in_cylinder) = NaN;
 
 % Plot Velocity Magnitude (Contourf)
-velocity_magnitude = sqrt(Ux_grid.^2 + Uy_grid.^2);
-contourf(X, Y, velocity_magnitude, 20, 'LineStyle', 'none');
-hold on;
-rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderRadius, 2*cylinderRadius, 2*cylinderRadius], 'Curvature', [1 1], 'FaceColor', 'w');
-colorbar;
-title('Velocity Magnitude');
-xlabel('x');
-ylabel('y');
-axis equal;
-axis([0 channelLength 0 channelHeight]);
+% disp('Visualizing results...');
+% figure('Units', 'normalized', 'Position', [0.1 0.1 0.8 0.7]);
+% sgtitle('Fluid Flow Around a Cylinder Simulation');
+% velocity_magnitude = sqrt(Ux_grid.^2 + Uy_grid.^2);
+% contourf(X, Y, velocity_magnitude, 20, 'LineStyle', 'none');
+% hold on;
+% rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderRadius, 2*cylinderRadius, 2*cylinderRadius], 'Curvature', [1 1], 'FaceColor', 'w');
+% colorbar;
+% title('Velocity Magnitude');
+% xlabel('x');
+% ylabel('y');
+% axis equal;
+% axis([0 channelLength 0 channelHeight]);
 
 % 10. --- Flow Front Tracing ---
 disp('Tracing flow front...');
@@ -185,62 +185,60 @@ rectangle('Position', [cylinderCenterX-cylinderRadius, cylinderCenterY-cylinderR
 axis equal; axis([0 channelLength 0 channelHeight]);
 
 % Time integration parameters
-dt = 0.2;
+dt = 0.5;
 max_time = 200;
-for i = 1:10
-    % Define the initial line of particles (the "front")
-    t = 0;
-    num_points = 100;
-    initialX = zeros(1, num_points);
-    initialY = linspace(0, channelHeight, num_points);
-    points = [initialX; initialY]; % 2xN matrix of particle positions
+% Define the initial line of particles (the "front")
+t = 0;
+num_points = 200;
+initialX = zeros(1, num_points);
+initialY = linspace(0, channelHeight, num_points);
+points = [initialX; initialY]; % 2xN matrix of particle positions
+
+% Define max distance for connecting lines
+initial_spacing = channelHeight / (num_points - 1);
+max_line_distance = 2.5 * initial_spacing;
+
+% Plot the initial front with lines and markers
+h_front = plot(points(1,:), points(2,:), 'b.-', 'MarkerSize', 8);
+maxX = max(points(1,:));
+while maxX < channelLength && t < max_time
+    % Get the x and y coordinates of the current points
+    queryX = points(1,:);
+    queryY = points(2,:);
     
-    % Define max distance for connecting lines
-    initial_spacing = channelHeight / (num_points - 1);
-    max_line_distance = 2.5 * initial_spacing;
+    % Interpolate the velocity field at the particle locations
+    velX = interp2(X, Y, Ux_grid, queryX, queryY, 'linear', 0);
+    velY = interp2(X, Y, Uy_grid, queryX, queryY, 'linear', 0);
     
-    % Plot the initial front with lines and markers
-    h_front = plot(points(1,:), points(2,:), 'b.-', 'MarkerSize', 8);
-    maxX = max(points(1,:));
-    while maxX < channelLength && t < max_time
-        % Get the x and y coordinates of the current points
-        queryX = points(1,:);
-        queryY = points(2,:);
-        
-        % Interpolate the velocity field at the particle locations
-        velX = interp2(X, Y, Ux_grid, queryX, queryY, 'linear', 0);
-        velY = interp2(X, Y, Uy_grid, queryX, queryY, 'linear', 0);
-        
-        % Update particle positions using Euler integration
-        points = points + [velX; velY] * dt;
-        
-        % --- Logic to break lines that are too long ---
-        % Calculate the distance between adjacent points
-        point_diffs = diff(points, 1, 2);
-        distances = sqrt(sum(point_diffs.^2, 1));
-        
-        % Find indices where the line should break
-        break_indices = find(distances > max_line_distance);
-        
-        % Create new data with NaNs inserted at the break points
-        plotX = points(1,:);
-        plotY = points(2,:);
-        
-        % Insert NaNs to break the line. We shift the indices by 1 because
-        % diff reduces the array size by 1.
-        for idx = fliplr(break_indices) % Go backwards to not mess up indices
-            plotX = [plotX(1:idx), NaN, plotX(idx+1:end)];
-            plotY = [plotY(1:idx), NaN, plotY(idx+1:end)];
-        end
-        
-        % Update the plot with the new front position
-        set(h_front, 'XData', plotX, 'YData', plotY);
-        drawnow; % Force MATLAB to update the figure window
-        
-        % Update loop conditions
-        maxX = max(points(1,:));
-        t = t + dt;
+    % Update particle positions using Euler integration
+    points = points + [velX; velY] * dt;
+    
+    % --- Logic to break lines that are too long ---
+    % Calculate the distance between adjacent points
+    point_diffs = diff(points, 1, 2);
+    distances = sqrt(sum(point_diffs.^2, 1));
+    
+    % Find indices where the line should break
+    break_indices = find(distances > max_line_distance);
+    
+    % Create new data with NaNs inserted at the break points
+    plotX = points(1,:);
+    plotY = points(2,:);
+    
+    % Insert NaNs to break the line. We shift the indices by 1 because
+    % diff reduces the array size by 1.
+    for idx = fliplr(break_indices) % Go backwards to not mess up indices
+        plotX = [plotX(1:idx), NaN, plotX(idx+1:end)];
+        plotY = [plotY(1:idx), NaN, plotY(idx+1:end)];
     end
+    
+    % Update the plot with the new front position
+    set(h_front, 'XData', plotX, 'YData', plotY);
+    drawnow;
+    
+    % Update loop conditions
+    maxX = max(points(1,:));
+    t = t + dt;
 end
 hold off;
 disp('Flow front tracing complete.');
