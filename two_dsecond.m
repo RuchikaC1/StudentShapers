@@ -7,7 +7,7 @@
 close all; clear;
 
 Pin   = 1e5;      % inlet pressure [Pa]
-k    = 1e-12;    % permeability [m^2]
+k    = 1e-11;    % permeability [m^2]
 mu    = 0.1;      % viscosity [Pa·s]
 pf = 0; %pre-set pressure at flow-front
 
@@ -175,22 +175,26 @@ f(inlet_nodes)=1;
 is_node_full(inlet_nodes)=true;
 
 %Initialise the first nodes 
-first_nodes = find(nodes(:,1)<= 0.00026);
+first_nodes = find(nodes(:,1)<= 0.00046);
 % Remove any nodes from the front list that are also inlet nodes.
 first_nodes = setdiff(first_nodes, inlet_nodes);
 f(first_nodes)= 1;
 is_node_full(first_nodes)= true;   
 
 %%initial flow pressure etc
-max_iterations = 5000; % Safety break to prevent infinite loops
+max_iterations = 1000; % Safety break to prevent infinite loops
 iteration = 0;
 flow_history = {}; % Cell array to store results for animation
  %calculating the local and global flux
 Gf = zeros(Nnodes,1);
 
 while any(~is_node_full) && iteration < max_iterations % Loop until all nodes are full
-    
+% 
     iteration = iteration + 1;
+     % This command prints the iteration number and other info
+     fprintf('Iteration: %d, Time: %.4f s, Filled Nodes: %d/%d\n', ...
+            iteration, current_time, sum(is_node_full), Nnodes);
+
     %set the boundary conditions 
 
     % % 1. Get the x-coordinates for ONLY the nodes in your initial set.
@@ -213,15 +217,26 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
 
     % 1. Find all nodes that are currently full.
     full_nodes = find(is_node_full);
-    
+
     % 2. Find all elements connected to these full nodes.
     candidate_elements = unique(cat(1, elemList{full_nodes}));
-    
+
     % 3. Get all nodes belonging to these candidate elements.
     candidate_nodes = unique(elements(candidate_elements, :));
-    
+
     % 4. The flow front is the set of candidate nodes that are NOT yet full.
     flow_front_nodes_idx = setdiff(candidate_nodes, full_nodes);
+
+    %    % --- CORRECTED FLOW FRONT DEFINITION ---
+    % % The front consists of all nodes that are partially filled.
+    % % We use small tolerances to avoid floating point issues.
+    % flow_front_nodes_idx = find(f > 1e-6 & f < 0.99999);
+    % 
+    % % This replaces the old multi-line logic:
+    % full_nodes = find(is_node_full);
+    % candidate_elements = unique(cat(1, elemList{full_nodes}));
+    % candidate_nodes = unique(elements(candidate_elements, :));
+    % flow_front_nodes_idx = setdiff(candidate_nodes, full_nodes);
     
     % Handle the case where the front is empty but mold isn't full (should not happen in a connected mesh)
     if isempty(flow_front_nodes_idx) && any(~is_node_full)
@@ -270,6 +285,16 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
     vy_cen= -k/mu * gradPy_cen;
 
     ve= [vx_cen,vy_cen];
+
+     Gf = zeros(Nnodes,1);
+    % --- Initialize I and Q arrays to zero ---
+    I1 = zeros(Ne, 1);
+    I2 = zeros(Ne, 1);
+    I3 = zeros(Ne, 1);
+    Q_1 = zeros(Ne, 1);
+    Q_2 = zeros(Ne, 1);
+    Q_3 = zeros(Ne, 1);
+
    
     for i= 1:Ne
         vid = elements(i,:); %three node IDS 
@@ -280,9 +305,9 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
         I2(i) = dot(ve(i,:), normal_oa(i,:))*len_oa(i)*t;
         I3(i) = dot(ve(i,:), normal_ob(i,:))*len_ob(i)*t;
     
-        Q_1(i)= f(vid(1))*I1(1,i) - f(vid(2))*I2(1,i);
-        Q_2(i) = f(vid(2))*I2(1,i) - f(vid(3))*I3(1,i);
-        Q_3(i) = f(vid(3))*I3(1,i) - f(vid(1))*I1(1,i);
+        Q_1(i)= f(vid(1))*I1(i) - f(vid(2))*I2(i);
+        Q_2(i) = f(vid(2))*I2(i) - f(vid(3))*I3(i);
+        Q_3(i) = f(vid(3))*I3(i) - f(vid(1))*I1(i);
 
         %global flux
         Gf(vid(1)) = Gf(vid(1)) + Q_1(i);
@@ -293,8 +318,8 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
     delta_t_array = globalVol .* (1- f) ./ Gf;
     delta_t_array(delta_t_array <=0) = inf; % Ignore non-positive time steps
 
-    delta_t = min(delta_t_array);
-    indices = find(delta_t_array ~= inf);
+    % 2. Get both the minimum time AND the index of the node that should fill
+    [delta_t, node_that_should_fill_idx] = min(delta_t_array);
 
     % Check for invalid time step (can happen if flow stagnates)
     if isinf(delta_t) || isnan(delta_t)
@@ -302,12 +327,22 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
         break;
     end
 
+     % CORRECT: Advance time
+    current_time = current_time + delta_t;
+
     f = f + (Gf *delta_t)./globalVol; 
+    % % 4. IMPORTANT: Manually set the node that should have filled to 1.0
+    % % This overcomes the floating-point errors and guarantees progress.
+    % if ~isempty(node_that_should_fill_idx)
+    %     f(node_that_should_fill_idx) = 1.0;
+    % end
+
     f = min(f, 1.0); % Cap fill fraction at 1
+    f = max(f, 0.0); % FIX: Prevent fill fraction from going negative
 
     % 4. Update the status of nodes that just became full.
     %    Find nodes that are now full but weren't before.
-    newly_filled_nodes = find(f >= 1 & ~is_node_full);
+    newly_filled_nodes = find(f >= 0.98 & ~is_node_full);
 
     if ~isempty(newly_filled_nodes)
     is_node_full(newly_filled_nodes) = true;
@@ -323,3 +358,47 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
     flow_history{end+1} = history_entry;
 
 end
+
+disp('Simulation Finished.');
+
+%% 5) ANIMATION OF THE ENTIRE PROCESS
+disp('Creating animation of the flow front...');
+
+figure('Name', 'Resin Flow Animation');
+
+for k = 1:length(flow_history)
+    current_f = flow_history{k}.fill_fraction;
+    current_time = flow_history{k}.time;
+
+      % --- IMPORTANT FIX: Clean any NaN values before plotting ---
+    current_f(isnan(current_f)) = 0;
+    
+    % Clear the figure for the new frame
+    clf; 
+    
+    % Plot the filled area
+    pdeplot(model, 'XYData', current_f, 'ColorMap', 'parula', 'Mesh', 'off');
+    axis equal;
+    clim([0 1]);
+    colorbar;
+    title(sprintf('Flow Front at Time = %.4f s', current_time));
+    hold on;
+    
+    % --- CORRECTED CODE ---
+    % 1. Plot the contour and get the graphics handle.
+    h = pdeplot(model, 'XYData', current_f, 'Contour', 'on', 'Levels', 0.5);
+    
+    % 2. Use the standard 'set' command to change the color and width.
+    set(h, 'Color', 'red', 'LineWidth', 2);
+        
+    hold off;
+    
+    % Force MATLAB to draw the frame now
+    drawnow;
+
+     % --- ADD THIS LINE TO SLOW DOWN THE ANIMATION ---
+    % Pause for 0.1 seconds. Increase the number for a slower video.
+    pause(0.1);
+end
+
+disp('Animation finished.');

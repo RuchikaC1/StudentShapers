@@ -182,79 +182,57 @@ f(first_nodes)= 1;
 is_node_full(first_nodes)= true;   
 
 %%initial flow pressure etc
-x_coords = model.Mesh.Nodes(1, first_nodes);
-    
-% 2. Find the maximum x-coordinate among these nodes.
-max_x = max(x_coords);
-
-% 3. Find the indices of all nodes in the 'first_nodes' list
-%    that have this maximum x-coordinate. A small tolerance is used
-%    for a safe comparison with floating-point numbers.
-front_thickness = 1e-7;
-is_rightmost_node = (x_coords >= (max_x +- front_thickness));
-
-% 4. The flow front is the list of node IDs from 'first_nodes'
-%    that are on the rightmost edge.
-flow_front_nodes_idx = first_nodes(is_rightmost_node);
-
-% figure
-% scatter(nodes(flow_front_nodes_idx,1), nodes(flow_front_nodes_idx,2))
-
-% Apply the Dirichlet boundary condition to the identified flow front nodes
-% --- Step 1: Assemble the raw system matrices ---
-% This creates the matrices for the PDE without any boundary conditions applied.
-fem_matrices = assembleFEMatrices(model);
-K = fem_matrices.K;
-F = fem_matrices.F;
-
-% Step 2: Manually enforce all pressure BC for the flow front
-% Enforce INLET condition
-for i = 1:length(inlet_nodes)
-    node_id = inlet_nodes(i);
-    K(node_id, :) = 0;
-    K(node_id, node_id) = 1;
-    F(node_id) = Pin;
-end
-% For each node on the front, we will modify the K and F matrices.
-for i = 1:length(flow_front_nodes_idx)
-    node_id = flow_front_nodes_idx(i);
-    
-    % Get rid of the old equation for this node.
-    K(node_id, :) = 0;
-    
-    % Set the new equation to be: 1 * P(node_id) = pf
-    K(node_id, node_id) = 1;
-    F(node_id) = pf;
-end
-
-
-max_iterations = 5000; % Safety break to prevent infinite loops
+max_iterations = 1000; % Safety break to prevent infinite loops
 iteration = 0;
 flow_history = {}; % Cell array to store results for animation
+ %calculating the local and global flux
+Gf = zeros(Nnodes,1);
 
 while any(~is_node_full) && iteration < max_iterations % Loop until all nodes are full
-    
+% 
     iteration = iteration + 1;
+    Gf = zeros(Nnodes,1);
+
     %set the boundary conditions 
 
-    % 1. Get the x-coordinates for ONLY the nodes in your initial set.
-    x_coords = model.Mesh.Nodes(1, first_nodes);
-    
-    % 2. Find the maximum x-coordinate among these nodes.
-    max_x = max(x_coords);
-    
-    % 3. Find the indices of all nodes in the 'first_nodes' list
-    %    that have this maximum x-coordinate. A small tolerance is used
-    %    for a safe comparison with floating-point numbers.
-    front_thickness = 1e-7;
-    is_rightmost_node = (x_coords >= (max_x +- front_thickness));
-    
-    % 4. The flow front is the list of node IDs from 'first_nodes'
-    %    that are on the rightmost edge.
-    flow_front_nodes_idx = first_nodes(is_rightmost_node);
+    % % 1. Get the x-coordinates for ONLY the nodes in your initial set.
+    % x_coords = model.Mesh.Nodes(1, first_nodes);
+    % 
+    % % 2. Find the maximum x-coordinate among these nodes.
+    % max_x = max(x_coords);
+    % 
+    % % 3. Find the indices of all nodes in the 'first_nodes' list
+    % %    that have this maximum x-coordinate. A small tolerance is used
+    % %    for a safe comparison with floating-point numbers.
+    % front_thickness = 1e-7;
+    % is_rightmost_node = (x_coords >= (max_x +- front_thickness));
+    % 
+    % % 4. The flow front is the list of node IDs from 'first_nodes'
+    % %    that are on the rightmost edge.
+    % flow_front_nodes_idx = first_nodes(is_rightmost_node);
 
-    figure
-    scatter(nodes(flow_front_nodes_idx,1), nodes(flow_front_nodes_idx,2))
+    % PLACE THIS LOGIC INSIDE YOUR WHILE LOOP
+
+    % 1. Find all nodes that are currently full.
+    full_nodes = find(is_node_full);
+    
+    % 2. Find all elements connected to these full nodes.
+    candidate_elements = unique(cat(1, elemList{full_nodes}));
+    
+    % 3. Get all nodes belonging to these candidate elements.
+    candidate_nodes = unique(elements(candidate_elements, :));
+    
+    % 4. The flow front is the set of candidate nodes that are NOT yet full.
+    flow_front_nodes_idx = setdiff(candidate_nodes, full_nodes);
+    
+    % Handle the case where the front is empty but mold isn't full (should not happen in a connected mesh)
+    if isempty(flow_front_nodes_idx) && any(~is_node_full)
+        disp('Warning: No flow front found, but mold is not full. Exiting.');
+        break;
+    end
+
+    % figure
+    % scatter(nodes(flow_front_nodes_idx,1), nodes(flow_front_nodes_idx,2))
 
     % Apply the Dirichlet boundary condition to the identified flow front nodes
     % --- Step 1: Assemble the raw system matrices ---
@@ -294,10 +272,7 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
     vy_cen= -k/mu * gradPy_cen;
 
     ve= [vx_cen,vy_cen];
-
-    %calculating the local and global flux
-    Gf = zeros(Nnodes,1);
-    
+   
     for i= 1:Ne
         vid = elements(i,:); %three node IDS 
         v = nodes(vid, :); %coordinates
@@ -329,12 +304,16 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
         break;
     end
 
+     % CORRECT: Advance time
+    current_time = current_time + delta_t;
+
     f = f + (Gf *delta_t)./globalVol; 
     f = min(f, 1.0); % Cap fill fraction at 1
+    f = max(f, 0.0); % FIX: Prevent fill fraction from going negative
 
     % 4. Update the status of nodes that just became full.
     %    Find nodes that are now full but weren't before.
-    newly_filled_nodes = find(f >= 1 & ~is_node_full);
+    newly_filled_nodes = find(f >= 0.9999 & ~is_node_full);
 
     if ~isempty(newly_filled_nodes)
     is_node_full(newly_filled_nodes) = true;
@@ -346,7 +325,41 @@ while any(~is_node_full) && iteration < max_iterations % Loop until all nodes ar
     history_entry = struct();
     history_entry.time = current_time;
     history_entry.fill_fraction = f;
-    history_entry.pressure = P; % Optional: store pressure field
+    history_entry.pressure = P; % store pressure field
     flow_history{end+1} = history_entry;
 
 end
+
+disp('Simulation Finished.');
+
+%% 5) ANIMATION OF THE ENTIRE PROCESS
+disp('Creating animation of the flow front...');
+
+figure('Name', 'Resin Flow Animation');
+
+for k = 1:length(flow_history)
+    current_f = flow_history{k}.fill_fraction;
+    current_time = flow_history{k}.time;
+    
+    % Clear the figure for the new frame
+    clf; 
+    
+    % Plot the filled area
+    pdeplot(model, 'XYData', current_f, 'ColorMap', 'parula', 'Mesh', 'off');
+    axis equal;
+    clim([0 1]);
+    colorbar;
+    title(sprintf('Flow Front at Time = %.4f s', current_time));
+    hold on;
+    
+    % Draw the contour line where f = 0.5
+    pdeplot(model, 'XYData', current_f, 'Contour', 'on', 'Levels', 0.5, ...
+        'Color', 'red', 'LineWidth', 2);
+        
+    hold off;
+    
+    % Force MATLAB to draw the frame now
+    drawnow;
+end
+
+disp('Animation finished.');
