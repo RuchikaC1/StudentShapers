@@ -3,10 +3,10 @@
 % Particles: 6 circles of radius 0.5 mm
 % Inlet (left): P = Pin; Outlet (right): P = 0; No‐flow on top/bottom and particle walls.
 
-close all; clear;
+close all; clear;clc
 
 Pin   = 1e5;      % inlet pressure [Pa]
-K     = 1e-12;    % permeability [m^2]
+K     = 1e-9;    % permeability [m^2]
 mu    = 0.1;      % viscosity [Pa·s]
 
 %% 1) Create PDE model
@@ -84,11 +84,8 @@ axis equal;
 applyBoundaryCondition(model,'dirichlet','Edge',edgesLeft,  'u',Pin);
 applyBoundaryCondition(model,'dirichlet','Edge',edgesRight, 'u',0);
 applyBoundaryCondition(model,'neumann',  'Edge',edgesTopBottom,'g',0,'q',0);
-
-%% 5) PDE coefficients
-specifyCoefficients(model,'m',0,'d',0,'c',-K/mu,'a',0,'f',0);
-
-%% 6) Solve
+ specifyCoefficients(model,'m',0,'d',0,'c',-K/mu,'a',0,'f',0);
+ %% 6) Solve
 
 disp('Solving pde')
 R = solvepde(model);
@@ -98,6 +95,301 @@ P = R.NodalSolution;
 [gradPx,gradPy] = evaluateGradient(R);
 vx = -K/mu * gradPx;
 vy = -K/mu * gradPy;
+%% 
+
+% %% 5) Dynamic Flow Simulation Loop
+% Npt = 120; % Number of markers along the flow front
+% x0_seed  = 0.1e-3;            % seed infiltration depth (100 µm)
+% front    = [ x0_seed*ones(1,Npt);
+%              linspace(0,H,Npt) ];          % initial front at x = x0_seed
+% 
+% % front = [zeros(1,Npt); linspace(0,H,Npt)]; % Initial flow front at x=0
+% 
+% dt = 0.5;   % Time step [s] - choose carefully for stability
+% Tfinal = 100; % Final simulation time [s]
+% 
+% % Get node coordinates for interpolants
+% Xn = mesh.Nodes(1,:)';
+% Yn = mesh.Nodes(2,:)';
+% 
+% % Pre-calculate particle boundary checks for efficiency (This section remains outside the loop)
+% % Create a binary mask for nodes inside particles
+% nodesInParticles = false(size(Xn));
+% for k = 1:nCirc
+%     nodesInParticles = nodesInParticles | ( (Xn - centers(k,1)).^2 + (Yn - centers(k,2)).^2 < (r-1e-6)^2 );
+% end
+% numNodes = size(mesh.Nodes, 2);
+% % Initialize plot for animation outside the loop
+% figure('Color','w','Position',[200 200 900 350]);
+% ax1= subplot(1,2,1); % Left subplot for pressure
+% axes(ax1); hold(ax1,'on');
+% hGroup = pdeplot(model, ...
+%     'XYData', zeros(numNodes,1), ...
+%     'Mesh','off'          ...
+% );
+% colormap(ax1, jet);
+% colorbar(ax1);
+% title(ax1, 'Pressure (Pa) at t = 0');
+% xlabel(ax1,'x (m)');  ylabel(ax1,'y (m)');
+% axis(ax1,'equal','tight');
+% arrayfun(@(k) viscircles(centers(k,:),r,'EdgeColor','k'), 1:nCirc);
+% hold(ax1,'off');
+% 
+% % Extract the patch object (the actual colored surface)
+% hPatch = findobj(hGroup, 'Type','Patch');
+% 
+% subplot(1,2,2); % Right subplot for flow front
+% hF = plot(front(1,:), front(2,:), 'r.-','MarkerSize',8);
+% axis([0 W 0 H]), axis equal;
+% xlabel('x (m)'); ylabel('y (m)');
+% title(sprintf('Flow front at t = %.2f s', 0));
+% hold on;
+% hCirclesFront = arrayfun(@(k) viscircles(centers(k,:),r,'EdgeColor','k'), 1:size(centers,1));
+% hold off;
+% 
+% % Define c_wet and c_dry here, as they are used in the function handle below
+% c_wet = -K/mu;
+% c_dry = 1e-12*c_wet ; % Very small coefficient for dry region (e.g., air, to prevent flow)
+% 
+% % Time marching loop
+% for t_step = 1:ceil(Tfinal/dt)
+%     t = (t_step - 1) * dt; % Current time
+% 
+%     % --- 1) Determine the "wet" status of each mesh node ---
+%       % 1) Build 1-D scatteredInterpolant for the front: y→x_front(y)
+%     Ffront = scatteredInterpolant( ...
+%         front(2,:)', front(1,:)', front(1,:)', ...
+%         'nearest','nearest' ...
+%     );
+%     Ffront.ExtrapolationMethod = 'nearest';
+% 
+% 
+%     % --- 2) Define PDE coefficients based on wet/dry regions ---
+%     % Define the 'c' coefficient function based on the current front and global constants
+%     % We need to pass centers, r, c_wet, c_dry to the helper function within this anonymous function
+%     current_c_func = @(location, state) arrayfun(@(lx, ly) ...
+%         ( (lx <= Ffront(ly)) && ~isPointInParticle(lx, ly, centers, r) ) * c_wet + ...
+%         ( ~( (lx <= Ffront(ly)) && ~isPointInParticle(lx, ly, centers, r) ) ) * c_dry, ...
+%         location.x, location.y);
+% 
+%     specifyCoefficients(model, 'm', 0, 'd', 0, 'c', current_c_func, 'a', 0, 'f', 0);
+% 
+%     % --- 3) Solve the PDE ---
+%     R = solvepde(model);
+%     P = R.NodalSolution;
+% 
+%     % --- 4) Calculate Darcy velocity based on LOCAL coefficients ---
+%     [gradPx,gradPy] = evaluateGradient(R);
+% 
+%     % Create a map from node coordinates to the c-coefficient value they should have
+%     node_c_map = zeros(size(Xn));
+%     for i = 1:numel(Xn)
+%         % Check if node is inside a particle
+%         isInParticle = isPointInParticle(Xn(i), Yn(i), centers, r);
+%         if isInParticle
+%             node_c_map(i) = c_dry; % Particles are always dry/no-flow
+%         elseif Xn(i) <= Ffront(Yn(i))
+%             node_c_map(i) = c_wet; % Wet region
+%         else
+%             node_c_map(i) = c_dry; % Dry region (air)
+%         end
+%     end
+% 
+%     K_mu_interpolant = scatteredInterpolant(Xn, Yn, -node_c_map, 'linear', 'nearest'); % -c is K/mu
+% 
+%     vx = -K_mu_interpolant(Xn, Yn) .* gradPx; % Element-wise multiplication
+%     vy = -K_mu_interpolant(Xn, Yn) .* gradPy;
+% 
+%     % --- 5) Rebuild scattered interpolants for advection ---
+%     Fx = scatteredInterpolant(Xn, Yn, vx,'linear','nearest');
+%     Fy = scatteredInterpolant(Xn, Yn, vy,'linear','nearest');
+% 
+%     % --- 6) Advect your front markers ---
+%     vxq = Fx(front(1,:)', front(2,:)');
+%     vyq = Fy(front(1,:)', front(2,:)');
+% 
+%     vxq(isnan(vxq)) = 0;
+%     vyq(isnan(vyq)) = 0;
+% 
+%     front(1,:) = front(1,:) + (vxq'*dt);
+%     front(2,:) = front(2,:) + (vyq'*dt);
+% 
+%     % Keep front points within bounds (W and H) and outside particles
+%     for i = 1:Npt
+%         front(1,i) = max(0, min(W, front(1,i)));
+%         front(2,i) = max(0, min(H, front(2,i)));
+% 
+%         % Simple particle repulsion
+%         for k = 1:nCirc
+%             dist = sqrt((front(1,i) - centers(k,1))^2 + (front(2,i) - centers(k,2))^2);
+%             if dist < r
+%                 vec_to_center = [front(1,i) - centers(k,1), front(2,i) - centers(k,2)];
+%                 if dist > 0
+%                     normalized_vec = vec_to_center / dist;
+%                     front(1,i) = centers(k,1) + normalized_vec(1) * r;
+%                     front(2,i) = centers(k,2) + normalized_vec(2) * r;
+%                 else % Point is exactly at center, push in arbitrary direction (e.g., to the right)
+%                      front(1,i) = centers(k,1) + r;
+%                 end
+%             end
+%         end
+%     end
+% 
+%     % --- 7) Update plots ---
+%    set(hPatch, 'CData', P);               % only CData changes
+%     title(ax1, sprintf('Pressure (Pa) at t = %.2f s', t));
+% 
+%     set(hF, 'XData', front(1,:), 'YData', front(2,:));
+%     title(subplot(1,2,2), sprintf('Flow front at t = %.2f s', t));
+% 
+%     drawnow;
+% end
+
+
+%% 5) Dynamic Flow Simulation Loop (pure function handle for c)
+% Npt     = 200;
+% x0_seed = 0.7e-3;  % start 0.1 mm into the domain
+% front   = [ x0_seed*ones(1,Npt);
+%             linspace(0,H,Npt) ];
+% 
+% dt     = 0.01;
+% Tfinal = 10;
+% 
+% % Plot setup (pressure patch + front)
+% fig = figure('Color','w','Position',[200 200 900 350]);
+% ax1 = subplot(1,2,1); hold(ax1,'on');
+% hG = pdeplot(model,'XYData',zeros(size(mesh.Nodes,2),1),'Mesh','off');
+% colormap(ax1,jet); colorbar(ax1);
+% axis(ax1,'equal','tight');
+% title(ax1,'Pressure (Pa) at t = 0');
+% xlabel(ax1,'x (m)'); ylabel(ax1,'y (m)');
+% arrayfun(@(k) viscircles(centers(k,:),r,'EdgeColor','k'),1:nCirc);
+% hold(ax1,'off');
+% hPatch = findobj(hG,'Type','Patch');
+% 
+% ax2 = subplot(1,2,2); hold(ax2,'on');
+% hF = scatter(front(1,:), front(2,:), 20, 'r','filled');
+% axis(ax2,'equal','tight',[0 W 0 H]);
+% title(ax2,'Flow front at t = 0');
+% xlabel(ax2,'x (m)'); ylabel(ax2,'y (m)');
+% arrayfun(@(k) viscircles(centers(k,:),r,'EdgeColor','k'),1:nCirc);
+% hold(ax2,'off');
+% 
+% % Darcy coefficients (positive so v = -c∇P into wet zone)
+% c_wet =  K/mu;
+% c_dry = 1e-6 * c_wet;
+% 
+% % Vectorized “inside any circle” test
+% inCircle = @(x,y) any( (x - centers(:,1)).^2 + (y - centers(:,2)).^2 < r^2 , 2 );
+% 
+% % Coefficient function handle
+% % 1) Build the c(x,y) handle for THIS front:
+%     % cfun = @(loc,~) buildC(loc.x, loc.y, front, c_wet, c_dry, centers, r);
+%     c=-K/mu;
+% 
+% % Main loop
+% for step = 1:ceil(Tfinal/dt)
+%     t = (step-1)*dt;
+% 
+%     % 1) Update specifyCoefficients with the current handle
+%     specifyCoefficients(model,'m',0,'d',0,'c',c,'a',0,'f',0);
+% 
+%     % 2) Solve PDE
+%     R = solvepde(model);
+%     P = R.NodalSolution;
+% 
+%     % 3) Compute velocity v = -c∇P
+%     [dPx, dPy] = evaluateGradient(R);
+%     % cfun gives c at mesh nodes when loc=mesh.Nodes
+%     % c_at_nodes = cfun(struct('x',mesh.Nodes(1,:)', 'y',mesh.Nodes(2,:)'), []);
+% 
+%     vxN = -c.* dPx;
+%     vyN = -c .* dPy;
+%     vmax = max( sqrt(vxN.^2 + vyN.^2) );
+%     fprintf('t = %.2f s, max nodal speed = %.3g m/s, front x’s [1, end] = [%.5g, %.5g]\n', ...
+%         t, vmax, front(1,1), front(1,end));
+% 
+%     % 4) Build interpolants and advect front
+%     Fx  = scatteredInterpolant(mesh.Nodes(1,:)', mesh.Nodes(2,:)', vxN, 'linear','nearest');
+%     Fy  = scatteredInterpolant(mesh.Nodes(1,:)', mesh.Nodes(2,:)', vyN, 'linear','nearest');
+%     vxq = Fx(front(1,:)', front(2,:)');
+%     vyq = Fy(front(1,:)', front(2,:)');
+%     vxq(isnan(vxq)) = 0; vyq(isnan(vyq)) = 0;
+%     % 6a) Prevent backward motion
+%     vxq(vxq < 0) = 0;    % no negative x-speeds
+%     vyq(vyq < 0) = 0;    % optionally if you only want upward or outward motion
+%     front(1,:) = front(1,:) + (vxq' * dt);
+%     front(2,:) = front(2,:) + (vyq' * dt);
+%     % 
+%     % 5) Clamp & repel from circles
+%     front(1,:) = min(max(front(1,:),0),W);
+%     front(2,:) = min(max(front(2,:),0),H);
+%     for i = 1:Npt
+%         for k = 1:nCirc
+%             d = hypot(front(1,i)-centers(k,1), front(2,i)-centers(k,2));
+%             if d < r
+%                 dir = ([front(1,i);front(2,i)] - centers(k,:)') / d;
+%                 front(:,i) = centers(k,:)' + dir * r;
+%             end
+%         end
+%     end
+% 
+%     % 6) Update plots
+%     set(hPatch,'CData',P);
+%     title(ax1,sprintf('Pressure (Pa) at t = %.2f s',t));
+%     set(hF,'XData',front(1,:),'YData',front(2,:));
+%     title(ax2,sprintf('Flow front at t = %.2f s',t));
+%     drawnow;
+% end
+%% Helper function for c(x,y)
+function cvals = buildC(xq, yq, front, c_wet, c_dry, centers, r)
+    % xq, yq are 1×Nq (row) arrays of query coordinates
+    
+    % 1) Get front x-position at each yq
+    xfront = interp1(front(2,:), front(1,:), yq, 'nearest', 'extrap');  % 1×Nq
+
+    % 2) Test inside any circle, vectorized
+    %    For each circle center, compute (xq-cx).^2 + (yq-cy).^2 < r^2
+    inside = false(size(xq));
+    for k = 1:size(centers,1)
+        inside = inside | ( (xq - centers(k,1)).^2 + (yq - centers(k,2)).^2 < r^2 );
+    end
+
+    % 3) Build wet/dry mask
+    wet = (xq <= xfront) & ~inside;   % 1×Nq logical
+
+    % 4) Return a 1×Nq row of coefficients
+    cvals = c_wet * double(wet) + c_dry * double(~wet);
+end
+
+% %% Helper to build c‐vector of size Nq×1
+% function cvals = buildC(x, y, xF_nodes)
+%   % x, y: column vectors of query points (size Nq×1)
+%   % xF_nodes: front x at each mesh node y—but we only need it at loc.y’s
+%   % Re-interpolate again (cheap for ~1e3 points):
+%   xfront = interp1(y, xF_nodes, y, 'nearest', 'extrap');
+% 
+%   % test inside any circle
+%   inside = false(size(x));
+%   for kk = 1:size(centers,1)
+%     inside = inside | ((x-centers(kk,1)).^2 + (y-centers(kk,2)).^2 < r^2);
+%   end
+% 
+%   wet = (x <= xfront) & ~inside;        % Nq×1 logical
+%   cvals = c_wet * double(wet) + c_dry * double(~wet);
+% end
+
+%% Helper function to check if a point is inside any particle
+% This function needs centers and r as inputs
+function isIn = isPointInParticle(px, py, centers, r)
+    isIn = false;
+    for k = 1:size(centers,1)
+        if sqrt((px - centers(k,1))^2 + (py - centers(k,2))^2) < r
+            isIn = true;
+            return;
+        end
+    end
+end
 
 %% 8) Prepare interpolation grid
 ngrid = 50; mgrid = 20;
@@ -180,46 +472,136 @@ hold off
 %animation
 
 %% --- Initialize a 2D front: a horizontal band of N markers along x=0:
-N = 100;
-frontPts = [zeros(1,N); linspace(0,H, N)];  % 2×N array
+% N = 100;
+% frontPts = [zeros(1,N); linspace(0,H, N)];  % 2×N array
+% 
+% dt = 5;    % choose small enough
+% tFinal = 200; % stop time
+% numSteps = ceil(tFinal/dt);
+% 
+% figure('Color','w');
+% for step = 1:numSteps
+%    % 1) solve PDE and get nodal velocities
+% 
+%     Xn    = R.Mesh.Nodes(1,:)';
+%     Yn    = R.Mesh.Nodes(2,:)';
+% 
+%     % 2) build interpolants
+%     Fx = scatteredInterpolant(Xn, Yn, vx(:), 'linear', 'none');
+%     Fy = scatteredInterpolant(Xn, Yn, vy(:), 'linear', 'none');
+% 
+%     % 3) sample at front points
+%     xq = frontPts(1,:)';  yq = frontPts(2,:)';
+%     vqx = Fx(xq,yq);      vqy = Fy(xq,yq);
+%     vqx(isnan(vqx)) = 0;  vqy(isnan(vqy)) = 0;
+% 
+%     % 4) advect
+%     frontPts(1,:) = frontPts(1,:) + (vqx'*dt);
+%     frontPts(2,:) = frontPts(2,:) + (vqy'*dt);
+% 
+%     % 5) re‐plot…
+%     clf;
+%     pdeplot(model,'XYData',R.NodalSolution,'Mesh','off'); 
+%     colormap(jet); colorbar; hold on;
+%     for k = 1:nCirc
+%       viscircles(centers(k,:), r,'EdgeColor','k');
+%     end
+%     plot(frontPts(1,:), frontPts(2,:), 'r.-','MarkerSize',10);
+%     title(sprintf('t = %.3f s', step*dt));
+%     axis equal tight; drawnow;
+% end
+Nx=200; Ny=80;
+[xg,yg] = meshgrid(linspace(0,W,Nx), linspace(0,H,Ny));
+Xn = R.Mesh.Nodes(1,:)'; Yn = R.Mesh.Nodes(2,:)';
+FX = scatteredInterpolant(Xn,Yn,vx,'linear','nearest');
+FY = scatteredInterpolant(Xn,Yn,vy,'linear','nearest');
 
-dt = 1;    % choose small enough
-tFinal = 50; % stop time
-numSteps = ceil(tFinal/dt);
+% 1) Build interpolants for the velocity field
+Fx = scatteredInterpolant(Xn, Yn, vx(:), 'linear','nearest');
+Fy = scatteredInterpolant(Xn, Yn, vy(:), 'linear','nearest');
 
+% 2) Initialize front markers at x=0
+Npt = 120;
+front = [ zeros(1,Npt); linspace(0,H,Npt) ];   % 2×N
+
+% 3) Set up the figure
 figure('Color','w');
-for step = 1:numSteps
-    % 1) solve PDE and get nodal velocities
-    R     = solvepde(model);
-    [dPx,dPy] = evaluateGradient(R);
-    vxN   = -K/mu * dPx;
-    vyN   = -K/mu * dPy;
-    Xn    = R.Mesh.Nodes(1,:)';
-    Yn    = R.Mesh.Nodes(2,:)';
+hCircles = arrayfun(@(k) ...
+  viscircles(centers(k,:),r,'EdgeColor','k'), ...
+  1:size(centers,1));
+hF = plot(front(1,:), front(2,:), 'r.-','MarkerSize',8);
+axis([0 W 0 H]), axis equal
+xlabel('x'), ylabel('y')
+title('Flow‐Front Advected by Darcy Velocity')
 
-    % 2) build interpolants
-    Fx = scatteredInterpolant(Xn, Yn, vxN(:), 'linear', 'none');
-    Fy = scatteredInterpolant(Xn, Yn, vyN(:), 'linear', 'none');
+% 4) Time‐march the front
+dt = 0.5;  Tfinal = 100;
+for t = 0:dt:Tfinal
+  % sample velocities at the marker locations
+  vxq = Fx(front(1,:)', front(2,:)');
+  vyq = Fy(front(1,:)', front(2,:)');
 
-    % 3) sample at front points
-    xq = frontPts(1,:)';  yq = frontPts(2,:)';
-    vqx = Fx(xq,yq);      vqy = Fy(xq,yq);
-    vqx(isnan(vqx)) = 0;  vqy(isnan(vqy)) = 0;
+  % update positions
+  front(1,:) = front(1,:) + (vxq'*dt);
+  front(2,:) = front(2,:) + (vyq'*dt);
 
-    % 4) advect
-    frontPts(1,:) = frontPts(1,:) + (vqx'*dt);
-    frontPts(2,:) = frontPts(2,:) + (vqy'*dt);
-
-    % 5) re‐plot…
-    clf;
-    pdeplot(model,'XYData',R.NodalSolution,'Mesh','off'); 
-    colormap(jet); colorbar; hold on;
-    for k = 1:nCirc
-      viscircles(centers(k,:), r,'EdgeColor','k');
-    end
-    plot(frontPts(1,:), frontPts(2,:), 'r.-','MarkerSize',10);
-    title(sprintf('t = %.3f s', step*dt));
-    axis equal tight; drawnow;
+  % re‐plot
+  set(hF, 'XData', front(1,:), 'YData', front(2,:));
+  title(sprintf('Flow front at t = %.2f s', t))
+  drawnow
 end
 
+% pre-compute mesh, geometry, BCs once (up through step 5)
 
+% build edge lists and call generateMesh(model,…) and applyBoundaryCondition(…) here
+
+% % time‐march
+% Npt = 120;               % number of points along your front
+% front = [zeros(1,Npt);   % initial x = 0
+%          linspace(0,H,Npt)];
+% dt    = 0.5;  Tfinal = 100;
+% 
+% for t = 0:dt:Tfinal
+%   % 1) Build a “wet” mask on the fixed mesh:
+%   Xn = mesh.Nodes(1,:)';  Yn = mesh.Nodes(2,:)';
+%       % Suppose you've just updated `front` in your time loop:
+% 
+%     % 1) sort by y:
+%     [y_sorted, I] = sort(front(2,:));    % y_sorted ascending
+%     x_sorted = front(1, I);
+% 
+%     % 2) rebuild the 1-D gridded interpolant:
+%     Ffront = griddedInterpolant(y_sorted, x_sorted, ...
+%                                 'nearest', 'nearest');
+%     Ffront.ExtrapolationMethod = 'nearest';   % guard against y outside [0 H]
+%   wet    = Xn <= Ffront(Yn);    % node is wet if its x ≤ local front
+%     c_min = 1e-8 * (K/mu);
+%   % 2) Update the Darcy coefficient c(x,y):
+%   cvec = zeros(size(Xn));
+%   cvec(wet) =  K/mu;
+%   specifyCoefficients(model, ...
+%     'm', 0, ...
+%     'd', 0, ...
+%     'c', @(loc,~) (K/mu) * (loc.x <= Ffront(loc.y)) + c_min * (loc.x > Ffront(loc.y)), ...
+%     'a', 0, ...
+%     'f', 0);
+% 
+%   % 3) Re-solve the PDE on the *same* mesh
+%   R  = solvepde(model);
+%   [dPx,dPy] = evaluateGradient(R);
+%   vxN = -dPx;  vyN = -dPy;
+% 
+%   % 4) Rebuild your scattered interpolants
+%   Fx = scatteredInterpolant(Xn, Yn, vxN,'linear','nearest');
+%   Fy = scatteredInterpolant(Xn, Yn, vyN,'linear','nearest');
+% 
+%   % 5) Advect your front markers
+%   vxq = Fx(front(1,:)', front(2,:)');
+%   vyq = Fy(front(1,:)', front(2,:)');
+%   vxq(isnan(vxq)) = 0;  vyq(isnan(vyq)) = 0;
+%   front(1,:) = front(1,:) + (vxq'*dt);
+%   front(2,:) = front(2,:) + (vyq'*dt);
+% 
+%   % 6) Re-plot…
+%   plot(front(1,:),front(2,:), 'r.-'); drawnow;
+% end
