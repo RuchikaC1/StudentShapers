@@ -7,15 +7,14 @@
 close all; clear;
 
 Pin   = 1e5;      % inlet pressure [Pa]
-mu    = 1;      % viscosity [Pa·s]
+k    = 1e-11;    % permeability [m^2]
+mu    = 0.1;      % viscosity [Pa·s]
 pf = 0; %pre-set pressure at flow-front
 
 Vf_target = 0.5; % The desired fiber volume fraction (60%)
 W = 10e-3;       % Total width of the preform
 H = 5e-3;        % Total height of the preform
-r = 0.63e-3;      % Radius of one circular fiber
-
-k    = ((1-Vf_target)^3) / (4.2*(6/(2*r))^2 *Vf_target^2);    % permeability [m^2]
+r = 0.5e-3;      % Radius of one circular fiber
 
 total_area = W * H;
 area_one_fiber = pi * r^2;
@@ -29,18 +28,18 @@ nCirc = round(nCirc_float);
 %% 1) Create PDE model
 model = createpde(1);    % scalar PDE (Darcy potential P)
 %% 2) Construct geometry: rectangle minus uniformly spaced circles
-W = 20e-3;   H = 15e-3;   % domain [m]
+W = 10e-3;   H = 5e-3;   % domain [m]
 R1 = [3;4; 0;W;W;0; 0;0;H;H];
 
 gd = R1;
 ns = 'R1';
 sf = 'R1';
 nCirc = 2;          % total number of circles
-r     = r;     % circle radius
+r     = 0.5e-3;     % circle radius
 
-% specify grid dimensions: 4 rows × 5 cols = 20 circles
-nRows = 4;
-nCols = 5;
+% specify grid dimensions: 2 rows × 3 cols = 6 circles
+nRows = 2;
+nCols = 1;
 
 % preallocate
 centers = zeros(nCirc,2);
@@ -71,7 +70,7 @@ ns = ns';
 geometryFromEdges(model, g);
 
 %% 3) Mesh once to classify edges
-mesh = generateMesh(model,'Hmax',0.2e-3, 'GeometricOrder','linear');
+mesh = generateMesh(model,'Hmax',0.1e-3, 'GeometricOrder','linear');
 
 numE = model.Geometry.NumEdges;
 edgesLeft  = [];
@@ -197,7 +196,7 @@ f(first_nodes)= 1;
 is_node_full(first_nodes)= true;   
 
 %%initial flow pressure etc
-max_iterations = 6000; % Safety break to prevent infinite loops
+max_iterations = 5000; % Safety break to prevent infinite loops
 iteration = 0;
 flow_history = {}; % Cell array to store results for animation
  %calculating the local and global flux
@@ -263,7 +262,7 @@ while any(~is_node_full)
         [delta_t, node_that_should_fill_idx] = min(delta_t_array);
 
              % --- FIX: Add a cap to prevent huge time jumps ---
-        max_delta_t = 0.5; % Set a reasonable maximum time step (e.g., 0.1 seconds)
+        max_delta_t = 0.1; % Set a reasonable maximum time step (e.g., 0.1 seconds)
         delta_t = min(delta_t, max_delta_t);
         
         if isinf(delta_t) || isnan(delta_t)
