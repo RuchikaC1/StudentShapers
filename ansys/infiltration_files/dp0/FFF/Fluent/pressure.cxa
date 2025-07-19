@@ -1,0 +1,10 @@
+AnimationSequence1.0
+NAME: pressure
+WINID: 0
+STORAGE: 5
+PLOTANIMATION: 0
+FRAMES: 4
+Frame 0 5 pressure_0000.hsf 0
+Frame 1 5 pressure_0001.hsf 0
+Frame 2 5 pressure_0002.hsf 0
+Frame 3 5 pressure_0003.hsf 0

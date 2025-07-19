@@ -1,0 +1,279 @@
+<FluentXMLReport>
+<version>
+Fluent
+Version: 2d, dp, pbns, vof, lam, transient (2d, double precision, pressure-based, VOF, laminar, transient)
+Release: 24.2.0
+Title: 
+</version>
+
+<Models>
+
+Models
+------
+
+   Model                        Settings                       
+   ---------------------------------------------------------
+   Space                        2D                             
+   Time                         Unsteady, 1st-Order Implicit   
+   Viscous                      Laminar                        
+   Heat Transfer                Disabled                       
+   Solidification and Melting   Disabled                       
+   Species                      Disabled                       
+   Coupled Dispersed Phase      Disabled                       
+   NOx Pollutants               Disabled                       
+   SOx Pollutants               Disabled                       
+   Soot                         Disabled                       
+   Mercury Pollutants           Disabled                       
+   Structure                    Disabled                       
+   Acoustics                    Disabled                       
+   Eulerian Wall Film           Disabled                       
+   Potential/Electrochemistry   Disabled                       
+   Multiphase                   Volume of Fluid                
+
+</Models>
+
+<MaterialProperties>
+Material Properties
+-------------------
+
+   Material: air (fluid)
+
+      Property               Units      Method     Value(s)   
+      -----------------------------------------------------
+      Density                kg/m^3     constant   1.225      
+      Cp (Specific Heat)     J/(kg K)   constant   1006.43    
+      Thermal Conductivity   W/(m K)    constant   0.0242     
+      Viscosity              kg/(m s)   constant   0.1        
+      Molecular Weight       kg/kmol    constant   28.966     
+
+   Material: resin (fluid)
+
+      Property               Units      Method     Value(s)   
+      -----------------------------------------------------
+      Density                kg/m^3     constant   1200       
+      Cp (Specific Heat)     J/(kg K)   constant   1006.43    
+      Thermal Conductivity   W/(m K)    constant   0.0242     
+      Viscosity              kg/(m s)   constant   1          
+      Molecular Weight       kg/kmol    constant   28.966     
+
+   Material: aluminum (solid)
+
+      Property               Units      Method     Value(s)   
+      -----------------------------------------------------
+      Density                kg/m^3     constant   2719       
+      Cp (Specific Heat)     J/(kg K)   constant   871        
+      Thermal Conductivity   W/(m K)    constant   202.4      
+
+</MaterialProperties>
+
+<CellZoneConditions>
+Cell Zone Conditions
+--------------------
+
+   Zones
+
+      name                          id   type    
+      ----------------------------------------
+      fff-1_surface (mixture)       2    fluid   
+      fff-1_surface (air-phase)     2    fluid   
+      fff-1_surface (resin-phase)   2    fluid   
+
+   Setup Conditions
+
+      fff-1_surface (mixture)
+
+         Condition       Value   
+         ---------------------
+         Frame Motion?   no      
+         Mesh Motion?    no      
+
+      fff-1_surface (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      fff-1_surface (resin-phase)
+
+         Condition   Value   
+         -----------------
+
+</CellZoneConditions>
+
+<BoundaryConditions>
+Boundary Conditions
+-------------------
+
+   Zones
+
+      name                               id   type              
+      -------------------------------------------------------
+      inlet (mixture)                    16   pressure-inlet    
+      inlet (air-phase)                  16   pressure-inlet    
+      inlet (resin-phase)                16   pressure-inlet    
+      outlet (mixture)                   6    pressure-outlet   
+      outlet (air-phase)                 6    pressure-outlet   
+      outlet (resin-phase)               6    pressure-outlet   
+      walls (mixture)                    7    wall              
+      walls (air-phase)                  7    wall              
+      walls (resin-phase)                7    wall              
+      fibres (mixture)                   8    wall              
+      fibres (air-phase)                 8    wall              
+      fibres (resin-phase)               8    wall              
+      wall-fff-1_surface (mixture)       5    wall              
+      wall-fff-1_surface (air-phase)     5    wall              
+      wall-fff-1_surface (resin-phase)   5    wall              
+
+   Setup Conditions
+
+      inlet (mixture)
+
+         Condition                   Value   
+         ---------------------------------
+         Gauge Total Pressure [Pa]   10      
+
+      inlet (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      inlet (resin-phase)
+
+         Condition         Value   
+         -----------------------
+         Volume Fraction   1       
+
+      outlet (mixture)
+
+         Condition   Value   
+         -----------------
+
+      outlet (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      outlet (resin-phase)
+
+         Condition   Value   
+         -----------------
+
+      walls (mixture)
+
+         Condition                  Value             
+         ------------------------------------------
+         Wall Motion                Stationary Wall   
+         Shear Boundary Condition   No Slip           
+
+      walls (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      walls (resin-phase)
+
+         Condition   Value   
+         -----------------
+
+      fibres (mixture)
+
+         Condition                  Value             
+         ------------------------------------------
+         Wall Motion                Stationary Wall   
+         Shear Boundary Condition   No Slip           
+
+      fibres (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      fibres (resin-phase)
+
+         Condition   Value   
+         -----------------
+
+      wall-fff-1_surface (mixture)
+
+         Condition                  Value             
+         ------------------------------------------
+         Wall Motion                Stationary Wall   
+         Shear Boundary Condition   No Slip           
+
+      wall-fff-1_surface (air-phase)
+
+         Condition   Value   
+         -----------------
+
+      wall-fff-1_surface (resin-phase)
+
+         Condition   Value   
+         -----------------
+
+</BoundaryConditions>
+
+<SolverSettings>
+Solver Settings
+---------------
+
+   Equations
+
+      Equation          Solved   
+      ------------------------
+      Flow              yes      
+      Volume Fraction   yes      
+
+   Numerics
+
+      Numeric                         Enabled   
+      ---------------------------------------
+      Absolute Velocity Formulation   yes       
+
+   Unsteady Calculation Parameters
+
+                                         
+      --------------------------------
+      Number of Time Steps       1000    
+      Time Step Size [s]         1       
+      Max Iterations/Time Step   10000   
+
+   Under-Relaxation Factors
+
+      Variable            Relaxation Factor   
+      -------------------------------------
+      Density             1                   
+      Body Forces         1                   
+      Explicit Momentum   0.75                
+      Explicit Pressure   0.75                
+
+   Linear Solver
+
+      Variable   Solver Type   Termination Criterion   Residual Reduction Tolerance   
+      -----------------------------------------------------------------------------
+      Flow       F-Cycle       0.1                                                    
+
+   Pressure-Velocity Coupling
+
+      Parameter             Value     
+      -----------------------------
+      Type                  Coupled   
+      Flow Courant Number   200       
+
+   Discretization Scheme
+
+      Variable          Scheme                
+      -------------------------------------
+      Pressure          PRESTO!               
+      Momentum          Second Order Upwind   
+      Volume Fraction   Geo-Reconstruct       
+
+   Solution Limits
+
+      Quantity                         Limit   
+      --------------------------------------
+      Minimum Absolute Pressure [Pa]   1       
+      Maximum Absolute Pressure [Pa]   5e+10   
+      Minimum Static Temperature [K]   1       
+      Maximum Static Temperature [K]   5000    
+
+</SolverSettings>
+
+</FluentXMLReport>

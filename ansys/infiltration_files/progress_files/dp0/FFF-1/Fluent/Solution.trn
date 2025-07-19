@@ -1,0 +1,125 @@
+Transcript Start Time:  11:34:51, 16 Jul 2025 GMT Summer Time 
+Current Directory: "C:\Program Files\ANSYS Inc\v242\Framework\bin\Win64"
+
+Build Time: May 13 2024 11:17:42 EST 
+Executable Path: C:/PROGRA~1/ANSYSI~1/v242/fluent/ntbin/win64/fluent.exe
+
+---------------------------------------------------------------------------------------------
+ID    Hostname         Core  O.S.         PID    Vendor                                     
+---------------------------------------------------------------------------------------------
+n0*   LAPTOP-DRC2HPO2  1/16  Windows-x64  23228  AMD Ryzen 9 7940HS w/ Radeon 780M Graphics 
+host  LAPTOP-DRC2HPO2        Windows-x64  8448   AMD Ryzen 9 7940HS w/ Radeon 780M Graphics 
+
+MPI Option Selected: intel
+Selected system interconnect: default
+---------------------------------------------------------------------------------------------
+
+Cortex Process ID: 12292 
+License Server Path: 1055@ansysteach.cc.ic.ac.uk 
+Multicore SMT processors detected. Processor affinity set!
+Reading "C:\Users\bgbg0\Desktop\StudentShapers\ansys\infiltration_files\dp0\FFF-1\MECH\FFF-1.2.msh"...
+Buffering for file scan...
+
+   20852 nodes, binary.
+    4804 nodes, binary.
+   44822 2D interior faces, zone  1, binary.
+      20 2D velocity-inlet faces, zone  5, binary.
+      42 2D pressure-outlet faces, zone  6, binary.
+     242 2D wall faces, zone  7, binary.
+    4020 2D wall faces, zone  8, binary.
+     480 2D wall faces, zone  9, binary.
+   23746 mixed cells, zone  2, binary.
+
+Building...
+     mesh
+     materials,
+     interface,
+     domains,
+     zones,
+	wall-fff-1_surface
+	fibres
+	walls
+	outlet
+	inlet
+	fff-1_surface
+	interior-fff-1_surface
+     parallel,
+Done.
+
+Preparing mesh for display...
+Done.
+
+Writing Settings file "C:\Users\bgbg0\Desktop\StudentShapers\ansys\infiltration_files\dp0\FFF-1\Fluent\FFF-1.2.set"...
+	writing rp variables ... Done.
+	writing domain variables ... Done.
+	writing fff-1_surface (type fluid) (mixture) ... Done.
+	writing interior-fff-1_surface (type interior) (mixture) ... Done.
+	writing inlet (type velocity-inlet) (mixture) ... Done.
+	writing outlet (type pressure-outlet) (mixture) ... Done.
+	writing walls (type wall) (mixture) ... Done.
+	writing fibres (type wall) (mixture) ... Done.
+	writing wall-fff-1_surface (type wall) (mixture) ... Done.
+	writing zones map name-id ... Done.
+"Updating Setup cell..."
+"Updating Solution cell..."
+Initialization based on settings...
+
+Initialize using the hybrid initialization method.
+
+Checking case topology... 
+-This case has both inlets & outlets 
+-Pressure information is not available at the boundaries.
+ Case will be initialized with constant pressure
+
+	iter		scalar-0
+
+	1		0.000000e+00
+	2		0.000000e+00
+	3		0.000000e+00
+	4		0.000000e+00
+	5		0.000000e+00
+	6		0.000000e+00
+	7		0.000000e+00
+	8		0.000000e+00
+	9		0.000000e+00
+	10		0.000000e+00
+
+Hybrid initialization is done.
+Writing data to C:\\Users\\bgbg0\\Desktop\\StudentShapers\\ansys\\infiltration_files\\dp0\\FFF-1\\Fluent\\FFF-1.2.ip ...
+	x-coord
+	y-coord
+	pressure
+	x-velocity
+	y-velocity
+	k
+	omega
+	hyb_init-0
+	hyb_init-1
+Done.
+("Unable to update solution. Number of iterations should be greater than zero.")
+
+Error: Unable to update solution. Number of iterations should be greater than zero.
+Error Object: #f
+
+Performance Timer for 0 iterations on 1 compute node
+  Average wall-clock time per iteration:                0.000 sec
+  Global reductions per iteration:                          0 ops
+  Global reductions time per iteration:                 0.000 sec (0.0%)
+  Message count per iteration:                              0 messages
+  Data transfer per iteration:                          0.000 MB
+  LE solves per iteration:                                  0 solves
+  LE wall-clock time per iteration:                     0.000 sec (0.0%)
+  LE global solves per iteration:                           0 solves
+  LE global wall-clock time per iteration:              0.000 sec (0.0%)
+  LE global matrix maximum size:                            0
+  AMG cycles per iteration:                             0.000 cycles
+  Relaxation sweeps per iteration:                          0 sweeps
+  Relaxation exchanges per iteration:                       0 exchanges
+  LE early protections (stall) per iteration:           0.000 times
+  LE early protections (divergence) per iteration:      0.000 times
+  Total SVARS touched:                                    385
+
+  Total wall-clock time:                                0.000 sec
+
+Transcript Stop Time:  11:35:01, 16 Jul 2025 GMT Summer Time 
+Total Transcript Time: 0 Minute 10 Second.
