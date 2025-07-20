@@ -71,7 +71,7 @@ ns = ns';
 geometryFromEdges(model, g);
 
 %% 3) Mesh once to classify edges
-mesh = generateMesh(model,'Hmax',0.2e-3, 'GeometricOrder','linear');
+mesh = generateMesh(model,'Hmax', 3e-4, 'GeometricOrder','linear');
 
 numE = model.Geometry.NumEdges;
 edgesLeft  = [];
@@ -190,9 +190,9 @@ f(inlet_nodes)=1;
 is_node_full(inlet_nodes)=true;
 
 %Initialise the first nodes 
-first_nodes = find(nodes(:,1)<= 0.00046);
+first_nodes = find(nodes(:,1) <= 1e-3);
 % Remove any nodes from the front list that are also inlet nodes.
-first_nodes = setdiff(first_nodes, inlet_nodes);
+% first_nodes = setdiff(first_nodes, inlet_nodes);
 f(first_nodes)= 1;
 is_node_full(first_nodes)= true;   
 
@@ -203,29 +203,33 @@ flow_history = {}; % Cell array to store results for animation
  %calculating the local and global flux
 Gf = zeros(Nnodes,1);
 
+% precompute matrix
+fem_matrices = assembleFEMatrices(model);
+
 %% 4) MAIN SIMULATION SUPER-LOOP (HANDLES TRAPPED ISLANDS)
 fprintf('Starting main simulation loop...\n');
 super_loop_count = 0;
-while any(~is_node_full)
+stuck_counter = 0;
+while any(~is_node_full) && stuck_counter < 10
     super_loop_count = super_loop_count + 1;
     fprintf('\n--- Starting Filling Phase %d. Filled nodes: %d/%d ---\n', super_loop_count, sum(is_node_full), Nnodes);
     
     % --- Inner Simulation Loop (runs one phase until stall) ---
-    while iteration < max_iterations
+    while iteration < max_iterations && stuck_counter < 10
         iteration = iteration + 1;
         
         % DYNAMIC FRONT DEFINITION: The front is all partially filled nodes.
         % This is the most robust way to define the front.
-        flow_front_nodes_idx = find(f > 1e-6 & f < 0.99999);
+        flow_front_nodes_idx = find(f > 0 & f < 1);
         
         % STALL CHECK: If no nodes are partially filled, the front has vanished.
         if isempty(flow_front_nodes_idx)
             disp('Stall detected: No partially filled nodes found. Breaking to check for islands...');
+            stuck_counter = stuck_counter + 1;
             break; % Exit inner loop to let the super-loop handle it.
         end
         
         % --- SOLVE FOR PRESSURE ---
-        fem_matrices = assembleFEMatrices(model);
         K = fem_matrices.K;
         F = fem_matrices.F;
         bc_nodes = [inlet_nodes; flow_front_nodes_idx];
@@ -284,6 +288,7 @@ while any(~is_node_full)
         f = max(f, 0.0);       % Prevent f from going negative
         newly_filled_nodes = find(f >= 0.999 & ~is_node_full);
         if ~isempty(newly_filled_nodes)
+            stuck_counter = 0;
             is_node_full(newly_filled_nodes) = true;
             node_fill_time(newly_filled_nodes) = current_time;
         end
@@ -368,7 +373,7 @@ for n = 1:length(flow_history)
     
     % --- CORRECTED CHECK ---
     % Plot if the frame number 'n' is a multiple of 800, OR if it's the last frame.
-    if mod(n, 100) == 0 || n == length(flow_history)
+    if mod(n, 10) == 0 || n == length(flow_history)
     
         current_f = flow_history{n}.fill_fraction;
         current_time = flow_history{n}.time;
@@ -383,7 +388,7 @@ for n = 1:length(flow_history)
 
         % --- Create the Plot ---
         clf; % Clear the frame
-        scatter(nodes(:,1), nodes(:,2), 10, node_colors, 'filled');
+        scatter(nodes(:,1), nodes(:,2), 50, node_colors, 'filled');
         
         axis equal;
         title(sprintf('Flow Front Motion at Time = %.4f s (Frame %d)', current_time, n));
