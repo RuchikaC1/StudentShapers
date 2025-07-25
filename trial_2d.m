@@ -213,9 +213,9 @@ f(inlet_nodes)=1;
 is_node_full(inlet_nodes)=true;
 
 %Initialise the first nodes 
-first_nodes = find(nodes(:,1)<= 0.00046);
+first_nodes = find(nodes(:,1) <= 1e-3);
 % Remove any nodes from the front list that are also inlet nodes.
-first_nodes = setdiff(first_nodes, inlet_nodes);
+% first_nodes = setdiff(first_nodes, inlet_nodes);
 f(first_nodes)= 1;
 is_node_full(first_nodes)= true;   
 
@@ -226,15 +226,19 @@ flow_history = {}; % Cell array to store results for animation
  %calculating the local and global flux
 Gf = zeros(Nnodes,1);
 
+% precompute matrix
+fem_matrices = assembleFEMatrices(model);
+
 %% 4) MAIN SIMULATION SUPER-LOOP (HANDLES TRAPPED ISLANDS)
 fprintf('Starting main simulation loop...\n');
 super_loop_count = 0;
-while any(~is_node_full)
+stuck_counter = 0;
+while any(~is_node_full) && stuck_counter < 10
     super_loop_count = super_loop_count + 1;
     fprintf('\n--- Starting Filling Phase %d. Filled nodes: %d/%d ---\n', super_loop_count, sum(is_node_full), Nnodes);
     
     % --- Inner Simulation Loop (runs one phase until stall) ---
-    while iteration < max_iterations
+    while iteration < max_iterations && stuck_counter < 10
         iteration = iteration + 1;
         
         % DYNAMIC FRONT DEFINITION: The front is all partially filled nodes.
@@ -406,6 +410,7 @@ while any(~is_node_full)
         f = max(f, 0.0);       % Prevent f from going negative
         newly_filled_nodes = find(f >= 0.999 & ~is_node_full);
         if ~isempty(newly_filled_nodes)
+            stuck_counter = 0;
             is_node_full(newly_filled_nodes) = true;
             node_fill_time(newly_filled_nodes) = current_time;
         end

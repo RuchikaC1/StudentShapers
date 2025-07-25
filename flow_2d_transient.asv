@@ -1,0 +1,248 @@
+% =========================================================================
+% 1. Problem Setup & Initialization
+% =========================================================================
+clear; clc; close all;
+fprintf('--- Starting Simulation Setup ---\n');
+% --- Physical and Numerical Parameters ---
+rho = 1.0;            % Fluid density [kg/m^3]
+% Using high viscosity for Stokes Flow (Re << 1)
+mu = 10;              % Dynamic viscosity [Pa*s]
+% Increase inlet pressure to drive the highly viscous fluid
+P_inlet = 1e5;      % Pressure applied at the inlet [Pa]
+H = 3;                % Half-height of the channel
+dt = 0.2;             % MODIFIED: Reduced time step for better transient capture
+t_end = 10.0;         % Total simulation time [s]
+alpha_p = 0.3;        % MODIFIED: Lowered for stability
+fprintf('Parameters loaded.\n');
+% --- Geometry and Mesh ---
+model = createpde(2); % System of 2 PDEs for (u,v)
+R1 = [3, 4, -10, 10, 10, -10, -H, -H, H, H]'; % Rectangle
+C1 = [1, 0, 0, 1]';                          % Circle at (0,0) with radius 1
+C1 = [C1; zeros(length(R1) - length(C1), 1)];
+geom = decsg([R1, C1], 'R1-C1', ['R1';'C1']');
+geometryFromEdges(model, geom);
+fprintf('Geometry created.\n');
+% Assign edge labels for clarity
+inletEdge = 4;
+outletEdge = 2;
+cylinderEdges = [5, 6, 7, 8]; % Edges of the subtracted circle
+wallEdges = [1, 3];
+h_cylinder = 0.3; % Mesh size on cylinder surface
+edge_pairs = {cylinderEdges, h_cylinder}; % Define as a cell array
+generateMesh(model, 'Hmax', 0.6, 'Hedge', edge_pairs, 'GeometricOrder', 'quadratic');
+fprintf('Mesh generated successfully.\n');
+figure;
+pdemesh(model);
+title('Finite Element Mesh');
+axis equal;
+% --- Boundary Conditions ---
+% No-slip on walls and cylinder (Dirichlet)
+applyBoundaryCondition(model, 'dirichlet', 'Edge', [wallEdges, cylinderEdges], 'u', [0, 0]);
+% Zero Neumann condition at the outlet AND inlet for free outflow/inflow velocity development.
+applyBoundaryCondition(model, 'neumann', 'Edge', [inletEdge, outletEdge], 'g', [0;0]);
+fprintf('Boundary conditions applied.\n');
+% --- Initialization ---
+nodes = model.Mesh.Nodes;
+N = size(nodes, 2);
+u_prev = zeros(N, 1);
+v_prev = zeros(N, 1);
+p_prev = zeros(N, 1);
+% --- Flow front tracking parameters ---
+velocity_threshold = 0.02; % Threshold to consider a node "wet"
+visualize_dry_nodes = true; % Flag to show the p=0 region
+penalty_K = 1e9; % Large penalty value for the vacuum region
+% Find nodes on the inlet and outlet edges by their x-coordinate.
+inlet_x_coordinate = -10;
+outlet_x_coordinate = 10;
+tolerance = 1e-6;
+inlet_node_indices = find(abs(model.Mesh.Nodes(1,:) - inlet_x_coordinate) < tolerance);
+outlet_node_indices = find(abs(model.Mesh.Nodes(1,:) - outlet_x_coordinate) < tolerance);
+fprintf('Fields initialized and pressure model created.\n');
+% --- Storage for Animation ---
+anim_frames = {};
+figure('Position', [100, 100, 1000, 500]);
+% =========================================================================
+% 2. Time-Stepping Loop (SIMPLE Method)
+% =========================================================================
+fprintf('\n--- Starting Transient Simulation ---\n');
+time_steps = 0:dt:t_end;
+for t = time_steps
+    fprintf('Solving for time t = %.2f s / %.2f s\n', t, t_end);
+    % --- Step 1: Solve Momentum Predictor for u*, v* ---
+    fprintf('  -> Step 1: Solving momentum predictor...\n');
+    [grad_p_x, grad_p_y] = evaluateGradient(model.Mesh, p_prev);
+    
+    c = mu;
+    a = rho / dt;
+    d = 0;
+    
+    f_handle = @(location, state) predictor_f_function_stokes(location, state, ...
+                                    rho, dt, u_prev, v_prev, grad_p_x, grad_p_y, nodes);
+    specifyCoefficients(model, 'm', 0, 'd', d, 'c', c, 'a', a, 'f', f_handle);
+    results_predictor = solvepde(model);
+    u_star = results_predictor.NodalSolution(:, 1);
+    v_star = results_predictor.NodalSolution(:, 2);
+    
+    % --- Step 2: Solve Pressure Correction (p') ---
+    fprintf('  -> Step 2: Solving for pressure correction...\n');
+    
+    [du_star_dx, ~] = evaluateGradient(model.Mesh, u_star);
+    [~, dv_star_dy] = evaluateGradient(model.Mesh, v_star);
+    div_u_star = du_star_dx + dv_star_dy;
+    % Define the vacuum region based on the PREVIOUS time step's velocity
+    velocity_magnitude_prev = sqrt(u_prev.^2 + v_prev.^2);
+    dry_node_indices_prev = find(velocity_magnitude_prev < velocity_threshold);
+    
+    % MODIFIED: This line was the primary cause of the flow stalling.
+    % By preventing a pressure source in the dry region, it stopped the
+    % pressure wave from propagating. The penalty function below is the
+    % correct way to handle the vacuum.
+    % div_u_star(dry_node_indices_prev) = 0;
+    
+    % =================== START OF CORRECTED CODE ===================
+    % Correctly set Dirichlet BCs for the p-correction equation.
+    % This forces the final pressure p_new to the desired values at the
+    % inlet (P_inlet) and outlet (0).
+    % Calculate the target p' value at the boundary nodes
+    p_prime_inlet_target = (P_inlet - p_prev(inlet_node_indices)) / alpha_p;
+    p_prime_outlet_target = (0 - p_prev(outlet_node_indices)) / alpha_p;
+    % Get the Y-coordinates of the boundary nodes for interpolation
+    % (Y is a unique coordinate along the vertical inlet/outlet edges)
+    inlet_nodes_y = model.Mesh.Nodes(2, inlet_node_indices);
+    outlet_nodes_y = model.Mesh.Nodes(2, outlet_node_indices);
+    % The solver requires interpolating values, so we must sort them
+    [sorted_inlet_y, sort_idx_in] = sort(inlet_nodes_y);
+    [sorted_outlet_y, sort_idx_out] = sort(outlet_nodes_y);
+    
+    % Create function handles for the boundary conditions that interpolate
+    % the target p' values based on the location on the edge.
+    inlet_bc_func = @(location, ~) interp1(sorted_inlet_y, p_prime_inlet_target(sort_idx_in), location.y, 'linear', 'extrap');
+    outlet_bc_func = @(location, ~) interp1(sorted_outlet_y, p_prime_outlet_target(sort_idx_out), location.y, 'linear', 'extrap');
+    % Re-create the pressure model to apply these new time-dependent BCs
+    model_p = createpde(1);
+    model_p.Geometry = model.Geometry;
+    model_p.Mesh = model.Mesh;
+    % Apply the new, correct boundary conditions for p'
+    applyBoundaryCondition(model_p, 'dirichlet', 'Edge', inletEdge, 'u', inlet_bc_func);
+    applyBoundaryCondition(model_p, 'dirichlet', 'Edge', outletEdge, 'u', outlet_bc_func);
+    applyBoundaryCondition(model_p, 'neumann', 'Edge', [wallEdges, cylinderEdges], 'g', 0);
+    
+    % --- Define coefficients and solve the p' equation ---
+    f_p_handle = @(location, state) pressure_f_function(location, state, rho, dt, div_u_star, nodes);
+    a_p_handle = @(location, state) penalty_a_function(location, state, penalty_K, u_prev, v_prev, velocity_threshold, nodes);
+    specifyCoefficients(model_p, 'm', 0, 'd', 0, 'c', 1, 'a', a_p_handle, 'f', f_p_handle);
+    % ==================== END OF CORRECTED CODE ====================
+    results_p_prime = solvepde(model_p);
+    p_prime = results_p_prime.NodalSolution;
+    
+    % --- Step 3: Correct Velocity and Pressure ---
+    fprintf('  -> Step 3: Correcting velocity and pressure...\n');
+    [grad_p_prime_x, grad_p_prime_y] = evaluateGradient(model.Mesh, p_prime);
+    u_new = u_star - (dt / rho) * grad_p_prime_x;
+    v_new = v_star - (dt / rho) * grad_p_prime_y;
+    p_new = p_prev + alpha_p * p_prime;
+    
+    % NOTE: The manual enforcement of pressure has been removed from here.
+    % --- Step 4: Update for Next Time Step & Visualize ---
+    u_prev = u_new;
+    v_prev = v_new;
+    p_prev = p_new;
+    pdeplot(model, 'XYData', sqrt(u_new.^2 + v_new.^2), 'Contour', 'on', 'FlowData', [u_new, v_new]);
+    title(sprintf('Velocity Magnitude and Streamlines at t = %.2f s', t));
+    axis equal;
+    colormap('jet');
+    caxis([0, max(max(sqrt(u_new.^2+v_new.^2)), 1)]); % Keep colorbar consistent
+    
+    % Visualize the dry region
+    if visualize_dry_nodes
+        hold on;
+        velocity_magnitude = sqrt(u_new.^2 + v_new.^2);
+        dry_node_indices = find(velocity_magnitude < velocity_threshold);
+        dry_nodes_coords = model.Mesh.Nodes(:, dry_node_indices);
+        scatter(dry_nodes_coords(1,:), dry_nodes_coords(2,:), 10, 'm', 'filled', 'MarkerFaceAlpha', 0.5);
+        hold off;
+        if ~isempty(dry_node_indices)
+            legend('', '', 'Vacuum Region'); % Add a legend entry
+        end
+    end
+    
+    drawnow;
+    anim_frames{end+1} = getframe(gcf);
+end
+fprintf('\n--- Simulation Finished ---\n');
+% =========================================================================
+% 3. Save Animation
+% =========================================================================
+try
+    fprintf('Saving animation...\n');
+    writerObj = VideoWriter('transient_flow_around_cylinder.mp4', 'MPEG-4');
+    writerObj.FrameRate = 10;
+    open(writerObj);
+    for i = 1:length(anim_frames)
+        writeVideo(writerObj, anim_frames{i});
+    end
+    close(writerObj);
+    fprintf('Animation saved to "transient_flow_around_cylinder.mp4"\n');
+catch e
+    fprintf('Could not save animation. Error: %s\n', e.message);
+end
+% =========================================================================
+% Helper & Coefficient Functions
+% =========================================================================
+function f = predictor_f_function_stokes(location, state, rho, dt, u_prev, v_prev, grad_px, grad_py, nodes)
+    % This function computes the f-coefficient for the momentum predictor step
+    % for the STOKES equations (no convective term).
+    
+    % Create interpolants for all previous-step data
+    F_u_prev = scatteredInterpolant(nodes(1,:)', nodes(2,:)', u_prev);
+    F_v_prev = scatteredInterpolant(nodes(1,:)', nodes(2,:)', v_prev);
+    F_grad_px = scatteredInterpolant(nodes(1,:)', nodes(2,:)', grad_px);
+    F_grad_py = scatteredInterpolant(nodes(1,:)', nodes(2,:)', grad_py);
+    % Evaluate interpolants at the query points (location).
+    u_loc = F_u_prev(location.x, location.y);
+    v_loc = F_v_prev(location.x, location.y);
+    grad_px_loc = F_grad_px(location.x, location.y);
+    grad_py_loc = F_grad_py(location.x, location.y);
+    nr = length(location.x);
+    f = zeros(2, nr);
+    
+    % Calculate the source term for Stokes flow
+    f(1, :) = (rho/dt) * u_loc.' - grad_px_loc.'; % Row for u-equation
+    f(2, :) = (rho/dt) * v_loc.' - grad_py_loc.'; % Row for v-equation
+end
+function f = pressure_f_function(location, state, rho, dt, div_u_star, nodes)
+    % This function computes the f-coefficient for the pressure correction step.
+    
+    F_div = scatteredInterpolant(nodes(1,:)', nodes(2,:)', div_u_star);
+    div_loc = F_div(location.x, location.y);
+    
+    % Based on user feedback, the solver runs when f is a column vector.
+    f = (rho/dt) * div_loc;
+end
+function a = penalty_a_function(location, state, K, u_prev, v_prev, threshold, nodes)
+    % This function defines the 'a' coefficient for the pressure correction
+    % equation. It applies a large penalty 'K' in the "dry" region to
+    % force the pressure correction to zero.
+    
+    % Create an interpolant for the previous velocity magnitude
+    mag_interpolant = scatteredInterpolant(nodes(1,:)', nodes(2,:)', sqrt(u_prev.^2 + v_prev.^2));
+    
+    % Evaluate the magnitude at the query points
+    mag_at_loc = mag_interpolant(location.x, location.y);
+    
+    nr = length(location.x);
+    a = zeros(1, nr); % 'a' must be a row vector for a single PDE
+    
+    % Find which points are in the dry region
+    dry_indices = find(mag_at_loc < threshold);
+    
+    % Apply the penalty at those points
+    a(dry_indices) = K;
+end
+function [gradx, grady] = evaluateGradient(mesh, data)
+    % Calculates gradient at element centroids
+    [gradx_c, grady_c] = pdegrad(mesh.Nodes, mesh.Elements, data);
+    % Interpolates from centroids to nodes
+    gradx = pdeprtni(mesh.Nodes, mesh.Elements, gradx_c);
+    grady = pdeprtni(mesh.Nodes, mesh.Elements, grady_c);
+end
