@@ -8,29 +8,20 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-        .slider-label {
-            @apply w-28 text-sm text-gray-600 text-right pr-4;
-        }
-        .slider-value {
-            @apply w-16 text-sm font-medium text-gray-800;
-        }
-        .control-group {
-            @apply flex items-center mb-4;
-        }
-    </style>
+    body {
+        font-family: 'Inter', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+</style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 lg:p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[90vh]">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[105vh]">
 
             <!-- Controls Panel -->
-            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg flex flex-col h-[88.5%] ">
                 <h1 class="text-2xl font-bold mb-6 text-gray-900">1D Flow Simulation</h1>
 
                 <!-- Simulation Type -->
@@ -44,30 +35,30 @@
 
                 <!-- Sliders -->
                 <div class="space-y-5">
-                    <div id="l-slider-group" class="control-group">
-                        <label for="l-slider" class="slider-label">L (mm)</label>
+                    <div id="l-slider-group" class="flex items-center mb-4">
+                        <label for="l-slider" class="w-28 text-sm text-gray-600 text-right pr-4">L (mm)</label>
                         <input type="range" id="l-slider" min="10" max="200" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        <span id="l-value" class="slider-value text-right">100</span>
+                        <span id="l-value" class="w-16 text-sm font-medium text-gray-800 text-right">100</span>
                     </div>
-                    <div id="vp-slider-group" class="control-group">
-                        <label for="vp-slider" class="slider-label">Vp</label>
+                    <div id="vp-slider-group" class="flex items-center mb-4">
+                        <label for="vp-slider" class="w-28 text-sm text-gray-600 text-right pr-4">Vp</label>
                         <input type="range" id="vp-slider" min="0.1" max="0.9" value="0.5" step="0.01" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        <span id="vp-value" class="slider-value text-right">0.50</span>
+                        <span id="vp-value" class="w-16 text-sm font-medium text-gray-800 text-right">0.50</span>
                     </div>
-                    <div id="dp-slider-group" class="control-group">
-                        <label for="dp-slider" class="slider-label">Dp (μm)</label>
+                    <div id="dp-slider-group" class="flex items-center mb-4">
+                        <label for="dp-slider" class="w-28 text-sm text-gray-600 text-right pr-4">Dp (μm)</label>
                         <input type="range" id="dp-slider" min="1" max="200" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        <span id="dp-value" class="slider-value text-right">50</span>
+                        <span id="dp-value" class="w-16 text-sm font-medium text-gray-800 text-right">50</span>
                     </div>
-                    <div id="mu-slider-group" class="control-group">
-                        <label for="mu-slider" class="slider-label">μ (Pa.s)</label>
+                    <div id="mu-slider-group" class="flex items-center mb-4">
+                        <label for="mu-slider" class="w-28 text-sm text-gray-600 text-right pr-4">μ (Pa.s)</label>
                         <input type="range" id="mu-slider" min="0.1" max="5" value="1" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        <span id="mu-value" class="slider-value text-right">1.0</span>
+                        <span id="mu-value" class="w-16 text-sm font-medium text-gray-800 text-right">1.0</span>
                     </div>
-                    <div id="p-slider-group" class="control-group">
-                        <label for="p-slider" class="slider-label">P (kPa)</label>
+                    <div id="p-slider-group" class="flex items-center mb-4">
+                        <label for="p-slider" class="w-28 text-sm text-gray-600 text-right pr-4">P (kPa)</label>
                         <input type="range" id="p-slider" min="10" max="500" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
-                        <span id="p-value" class="slider-value text-right">100</span>
+                        <span id="p-value" class="w-16 text-sm font-medium text-gray-800 text-right">100</span>
                     </div>
                 </div>
 
@@ -93,14 +84,14 @@
             <!-- Display Area -->
             <div class="lg:col-span-2 flex flex-col gap-6">
 
-            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[48%]">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[49%]">
                 <h2 id="simulationTitle" class="text-lg font-semibold text-center mb-2 text-gray-800">Adjust sliders and press Start</h2>
                 <canvas id="simulationCanvas" class="w-full rounded-lg flex-1 min-h-0"></canvas>
             </div>
 
-            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[34%]">
+            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[37%]">
                 <h2 class="text-lg font-semibold text-center mb-2 text-gray-800">Pressure vs. Distance</h2>
-                <canvas id="pressureCanvas" class="w-full"></canvas>
+                <canvas id="pressureCanvas" class="w-full rounded-lg"></canvas>
             </div>
 
         </div>
@@ -165,10 +156,12 @@
 
             // Get canvas pixel dimensions from CSS
             const canvasWidth = elements.simulationCanvas.parentElement.clientWidth;
-            const canvasHeight = elements.simulationCanvas.parentElement.clientHeight;
+            const canvasHeight = elements.simulationCanvas.clientHeight;
             // Set the internal drawing resolution to match the display size
-            elements.simulationCanvas.width = canvasWidth;
+            
+            elements.simulationCanvas.width = canvasWidth ;
             elements.simulationCanvas.height = canvasHeight;
+           
 
             // Clear whatever was there before
             simCtx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -270,7 +263,7 @@
                                     text: 'Pressure (kPa)'
                                 },
                                 min: 0,
-                                max: Pin * 1.1 // Add some padding
+                                max: Pin // Add some padding
                             }
                         },
                         plugins: {
@@ -282,7 +275,7 @@
             } else {
                 pressureChart.data = data;
                 pressureChart.options.scales.x.max = L;
-                pressureChart.options.scales.y.max = Pin * 1.1;
+                pressureChart.options.scales.y.max = Pin ;
                 pressureChart.update('none'); // 'none' for no animation
             }
         }
