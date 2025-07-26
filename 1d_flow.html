@@ -27,7 +27,7 @@
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 lg:p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[90vh]">
 
             <!-- Controls Panel -->
             <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
@@ -91,18 +91,19 @@
             </div>
 
             <!-- Display Area -->
-            <div class="lg:col-span-2 space-y-6">
-                <div class="bg-white p-4 rounded-xl shadow-lg">
-                    <h2 id="simulationTitle" class="text-lg font-semibold text-center mb-2 text-gray-800">Adjust sliders and press Start</h2>
-                    <canvas id="simulationCanvas" class="w-full rounded-lg"></canvas>
-                </div>
-                <div class="bg-white p-4 rounded-xl shadow-lg">
-                     <h2 class="text-lg font-semibold text-center mb-2 text-gray-800">Pressure vs. Distance</h2>
-                    <canvas id="pressureCanvas" class="w-full"></canvas>
-                </div>
+            <div class="lg:col-span-2 flex flex-col gap-6">
+
+            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[48%]">
+                <h2 id="simulationTitle" class="text-lg font-semibold text-center mb-2 text-gray-800">Adjust sliders and press Start</h2>
+                <canvas id="simulationCanvas" class="w-full rounded-lg flex-1 min-h-0"></canvas>
             </div>
+
+            <div class="bg-white p-4 rounded-xl shadow-lg flex flex-col h-[34%]">
+                <h2 class="text-lg font-semibold text-center mb-2 text-gray-800">Pressure vs. Distance</h2>
+                <canvas id="pressureCanvas" class="w-full"></canvas>
+            </div>
+
         </div>
-    </div>
 
     <script>
         // --- DOM Element References ---
@@ -146,7 +147,9 @@
         let pressureChart;
 
         // --- Constants ---
-        const halfHeight = 0.2; // m
+        const viewWidth_m = 0.2;      // NEW: Total width of the view in meters (e.g., 300mm)
+        const speedMultiplier = 300; // <-- ADD THIS LINE. Higher number = faster animation.
+        const halfHeight = 0.05; // m
         const fibreSpacingX = 0.01; // m
         const fibreSpacingY = 0.01; // m
 
@@ -157,55 +160,70 @@
          * This is the equivalent of MATLAB's updateFibres function.
          */
         function updateFibres() {
-            const L = parseFloat(elements.lSlider.value) * 1e-3; // m
+            const L = parseFloat(elements.lSlider.value) * 1e-3; // Get L in meters
             const phi = parseFloat(elements.phiInput.value);
 
-            // Set canvas dimensions based on aspect ratio
-            const canvasWidth = elements.simulationCanvas.clientWidth;
-            const canvasHeight = (canvasWidth * (2 * halfHeight)) / L;
+            // Get canvas pixel dimensions from CSS
+            const canvasWidth = elements.simulationCanvas.parentElement.clientWidth;
+            const canvasHeight = elements.simulationCanvas.parentElement.clientHeight;
+            // Set the internal drawing resolution to match the display size
             elements.simulationCanvas.width = canvasWidth;
             elements.simulationCanvas.height = canvasHeight;
 
+            // Clear whatever was there before
             simCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-            
-            // Draw composite section background
-            simCtx.fillStyle = '#E5E7EB'; // gray-200
-            simCtx.strokeStyle = '#1F2937'; // gray-800
-            simCtx.lineWidth = 1.5;
-            simCtx.fillRect(0, 0, canvasWidth, canvasHeight);
-            simCtx.strokeRect(0, 0, canvasWidth, canvasHeight);
 
-            // Calculate fibre properties
+            // --- NEW SCALING LOGIC ---
+            // Scale the drawing context to map our "view" (in meters) to the canvas (in pixels)
+            const scaleX = canvasWidth / viewWidth_m;
+            const scaleY = canvasHeight / (2 * halfHeight);
+            simCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+
+            // --- NEW DRAWING LOGIC (all in meters) ---
+            // Calculate the starting X position to center the preform in the view
+            const preformStartX = (viewWidth_m - L) / 2;
+
+            // 1. Draw composite section background
+            simCtx.fillStyle = '#E5E7EB'; // gray-200
+            simCtx.fillRect(preformStartX, 0, L, 2 * halfHeight);
+
+            // 2. Draw composite border
+            simCtx.strokeStyle = '#1F2937'; // gray-800
+            simCtx.lineWidth = 1 / scaleX; // Adjust line width for the new scale
+            simCtx.strokeRect(preformStartX, 0, L, 2 * halfHeight);
+
+            // 3. Draw fibres/particles
             const numFibresX = Math.floor(L / fibreSpacingX);
             const numFibresY = Math.floor(2 * halfHeight / fibreSpacingY);
-            if (numFibresX <= 0 || numFibresY <= 0) return;
-
+            if (numFibresX <= 0 || numFibresY <= 0) {
+                updatePressureChart(0);
+                return;
+            }
+            // ... (fibre calculation is the same)
             const cellWidth = L / numFibresX;
             const maxRadius = (cellWidth / 2) * 0.9;
             const radius = maxRadius * Math.sqrt(1 - phi);
 
-            // Draw fibres/particles
             simCtx.fillStyle = '#6B7280'; // gray-500
             const x_centers = Array.from({ length: numFibresX }, (_, i) => cellWidth / 2 + i * cellWidth);
             const y_centers = Array.from({ length: numFibresY }, (_, i) => fibreSpacingY / 2 + i * fibreSpacingY);
 
             for (let i = 0; i < numFibresX; i++) {
                 for (let j = 0; j < numFibresY; j++) {
-                    const x_pos_m = x_centers[i];
-                    const y_pos_m = y_centers[j];
+                    // Add the preformStartX offset to center the fibres correctly
+                    const fibreDrawX = preformStartX + x_centers[i];
+                    const fibreDrawY = y_centers[j];
                     
-                    // Convert meters to canvas pixels
-                    const x_px = (x_pos_m / L) * canvasWidth;
-                    const y_px = (y_pos_m / (2 * halfHeight)) * canvasHeight;
-                    const radius_px = (radius / L) * canvasWidth;
-
                     simCtx.beginPath();
-                    simCtx.arc(x_px, y_px, radius_px, 0, 2 * Math.PI);
+                    simCtx.arc(fibreDrawX, fibreDrawY, radius, 0, 2 * Math.PI);
                     simCtx.fill();
                 }
             }
+            
             updatePressureChart(0); // Reset pressure chart
         }
+   
+   
 
         /**
          * Updates the pressure chart based on the flow front position.
@@ -234,7 +252,7 @@
                     data: data,
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true,
+                        maintainAspectRatio: false,
                         scales: {
                             x: {
                                 type: 'linear',
@@ -339,7 +357,7 @@
             if (simState.startTime === 0) {
                 simState.startTime = timestamp;
             }
-            const elapsedTime = (timestamp - simState.startTime) / 1000; // seconds
+            const elapsedTime = (timestamp - simState.startTime) / 1000 *speedMultiplier; // seconds
 
             // --- Get current parameters ---
             const L = parseFloat(elements.lSlider.value) * 1e-3;
@@ -360,28 +378,31 @@
             }
             
             // --- Drawing ---
-            updateFibres(); // Redraw background and fibres
+            // --- Drawing ---
+            // 1. Redraw the static background (preform and fibres)
+            updateFibres();
 
-            // Draw filled region
-            const canvasWidth = elements.simulationCanvas.width;
-            const canvasHeight = elements.simulationCanvas.height;
-            const front_px = (x_front / L) * canvasWidth;
+            // 2. Draw the moving parts (resin and flow front) on top
             
-            simCtx.fillStyle = 'rgba(59, 130, 246, 0.4)'; // blue-500 with alpha
-            simCtx.fillRect(0, 0, front_px, canvasHeight);
+            const preformStartX = (viewWidth_m - L) / 2; // Recalculate start X
 
-            // Draw flow front line
+            // The context is already scaled by updateFibres, so we draw in meters
+            // Draw filled region (the blue resin)
+            simCtx.fillStyle = 'rgba(59, 130, 246, 0.4)';
+            simCtx.fillRect(preformStartX, 0, x_front, 2 * halfHeight);
+
+            // Draw flow front line (the red line)
             simCtx.strokeStyle = '#EF4444'; // red-500
-            simCtx.lineWidth = 3;
+            simCtx.lineWidth = 2 / (elements.simulationCanvas.width / viewWidth_m); // Adjust line width
             simCtx.beginPath();
-            simCtx.moveTo(front_px, 0);
-            simCtx.lineTo(front_px, canvasHeight);
+            simCtx.moveTo(preformStartX + x_front, 0);
+            simCtx.lineTo(preformStartX + x_front, 2 * halfHeight);
             simCtx.stroke();
             
             // --- Update UI ---
             const fill_percentage = (x_front / L) * 100;
-            const time_hrs = elapsedTime / 3600;
-            elements.simulationTitle.textContent = `Time: ${time_hrs.toFixed(2)} hrs | Fill: ${fill_percentage.toFixed(1)}%`;
+            const time_hrs = elapsedTime ;
+            elements.simulationTitle.textContent = `Time: ${time_hrs.toFixed(2)} seconds | Fill: ${fill_percentage.toFixed(1)}%`;
             updatePressureChart(x_front);
 
             // --- Loop Control ---
