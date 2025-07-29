@@ -96,127 +96,156 @@
 
         </div>
 
-    <script>
-        // --- DOM Element References ---
-        const getEl = (id) => document.getElementById(id);
-        const elements = {
-            particleButton: getEl('particleButton'),
-            fibreButton: getEl('fibreButton'),
-            lSlider: getEl('l-slider'),
-            vpSlider: getEl('vp-slider'),
-            dpSlider: getEl('dp-slider'),
-            muSlider: getEl('mu-slider'),
-            pSlider: getEl('p-slider'),
-            lValue: getEl('l-value'),
-            vpValue: getEl('vp-value'),
-            dpValue: getEl('dp-value'),
-            muValue: getEl('mu-value'),
-            pValue: getEl('p-value'),
-            kInput: getEl('k-input'),
-            phiInput: getEl('phi-input'),
-            startButton: getEl('startButton'),
-            pauseButton: getEl('pauseButton'),
-            simulationCanvas: getEl('simulationCanvas'),
-            pressureCanvas: getEl('pressureCanvas'),
-            simulationTitle: getEl('simulationTitle'),
-        };
+<script>
+    // --- DOM Element References ---
+    const getEl = (id) => document.getElementById(id);
+    const elements = {
+        particleButton: getEl('particleButton'),
+        fibreButton: getEl('fibreButton'),
+        lSlider: getEl('l-slider'),
+        vpSlider: getEl('vp-slider'),
+        dpSlider: getEl('dp-slider'),
+        muSlider: getEl('mu-slider'),
+        pSlider: getEl('p-slider'),
+        lValue: getEl('l-value'),
+        vpValue: getEl('vp-value'),
+        dpValue: getEl('dp-value'),
+        muValue: getEl('mu-value'),
+        pValue: getEl('p-value'),
+        kInput: getEl('k-input'),
+        phiInput: getEl('phi-input'),
+        startButton: getEl('startButton'),
+        pauseButton: getEl('pauseButton'),
+        simulationCanvas: getEl('simulationCanvas'),
+        pressureCanvas: getEl('pressureCanvas'),
+        simulationTitle: getEl('simulationTitle'),
+    };
 
-        // --- State Variables ---
-        let simState = {
-            type: 'particle', // 'particle' or 'fibre'
-            isRunning: false,
-            isPaused: false,
-            restartRequested: false,
-            isUpdating: false, // Prevents recursive updates
-            animationFrameId: null,
-            startTime: 0,
-            pauseTime: 0,
-        };
+    // --- State Variables ---
+    let simState = {
+        type: 'particle', // 'particle' or 'fibre'
+        isRunning: false,
+        isPaused: false,
+        restartRequested: false,
+        isUpdating: false, // Prevents recursive updates
+        animationFrameId: null,
+        startTime: 0,
+        pauseTime: 0,
+    };
 
-        // --- Canvas and Chart Setup ---
-        const simCtx = elements.simulationCanvas.getContext('2d');
-        let pressureChart;
+    // --- Canvas and Chart Setup ---
+    const simCtx = elements.simulationCanvas.getContext('2d');
+    let pressureChart;
 
-        // --- Constants ---
-        const viewWidth_m = 0.2;      // NEW: Total width of the view in meters (e.g., 300mm)
-        const speedMultiplier = 300; // <-- ADD THIS LINE. Higher number = faster animation.
-        const halfHeight = 0.05; // m
-        const fibreSpacingX = 0.01; // m
-        const fibreSpacingY = 0.01; // m
+    // --- Constants ---
+    const viewWidth_m = 0.2;
+    const speedMultiplier = 300;
+    const halfHeight = 0.045; // m
 
-        // --- Core Functions ---
+    // --- Core Functions ---
 
-        /**
-         * Updates the display of fibres/particles on the main canvas.
-         * This is the equivalent of MATLAB's updateFibres function.
-         */
-        function updateFibres() {
-            const L = parseFloat(elements.lSlider.value) * 1e-3; // Get L in meters
-            const phi = parseFloat(elements.phiInput.value);
+    /**
+     * UNIFORM GRID VERSION: Updates the display of fibres/particles on the main canvas.
+     * This version draws fibres in a regular grid, with spacing controlled by Vp.
+     */
+    function updateFibres() {
+    // --- Get values and convert to SI units (meters) ---
+    const L = parseFloat(elements.lSlider.value) * 1e-3;
+    const Vp = parseFloat(elements.vpSlider.value);
+    const Dp = parseFloat(elements.dpSlider.value); // Keep in microns for mapping
 
-            // Get canvas pixel dimensions from CSS
-            const canvasWidth = elements.simulationCanvas.parentElement.clientWidth;
-            const canvasHeight = elements.simulationCanvas.clientHeight;
-            // Set the internal drawing resolution to match the display size
-            
-            elements.simulationCanvas.width = canvasWidth ;
-            elements.simulationCanvas.height = canvasHeight;
-           
+    // --- Canvas Setup ---
+    const canvasWidth = elements.simulationCanvas.parentElement.clientWidth;
+    const canvasHeight = elements.simulationCanvas.clientHeight;
+    elements.simulationCanvas.width = canvasWidth;
+    elements.simulationCanvas.height = canvasHeight;
+    simCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-            // Clear whatever was there before
-            simCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+    // --- Scaling ---
+    const scaleX = canvasWidth / viewWidth_m;
+    const scaleY = canvasHeight / (2 * halfHeight);
+    simCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
 
-            // --- NEW SCALING LOGIC ---
-            // Scale the drawing context to map our "view" (in meters) to the canvas (in pixels)
-            const scaleX = canvasWidth / viewWidth_m;
-            const scaleY = canvasHeight / (2 * halfHeight);
-            simCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+    // --- Drawing (all in meters) ---
+    const preformStartX = (viewWidth_m - L) / 2;
 
-            // --- NEW DRAWING LOGIC (all in meters) ---
-            // Calculate the starting X position to center the preform in the view
-            const preformStartX = (viewWidth_m - L) / 2;
+    // 1. Draw composite section background and border
+    simCtx.fillStyle = '#E5E7EB'; // gray-200
+    simCtx.fillRect(preformStartX, 0, L, 2 * halfHeight);
+    simCtx.strokeStyle = '#1F2937'; // gray-800
+    simCtx.lineWidth = 1 / scaleX;
+    simCtx.strokeRect(preformStartX, 0, L, 2 * halfHeight);
 
-            // 1. Draw composite section background
-            simCtx.fillStyle = '#E5E7EB'; // gray-200
-            simCtx.fillRect(preformStartX, 0, L, 2 * halfHeight);
+    // --- NEW LOGIC: CALCULATE NUMBER OF FIBRES FROM AREA FRACTION ---
+    if (L <= 0 || Vp <= 0) {
+        if (!simState.isRunning) updatePressureChart(0);
+        return;
+    }
 
-            // 2. Draw composite border
-            simCtx.strokeStyle = '#1F2937'; // gray-800
-            simCtx.lineWidth = 1 / scaleX; // Adjust line width for the new scale
-            simCtx.strokeRect(preformStartX, 0, L, 2 * halfHeight);
+    // 2. Calculate fibre visual size based on Dp slider (relative sizing)
+    const dp_min = 1;
+    const dp_max = 200;
+    const dp_ratio = (Dp - dp_min) / (dp_max - dp_min);
+    const hypothetical_cell_size = L / 12; 
+    const max_visual_radius = (hypothetical_cell_size / 2) * 0.9;
+    const min_visual_radius = max_visual_radius * 0.1;
+    const fibreRadius = min_visual_radius + dp_ratio * (max_visual_radius - min_visual_radius);
 
-            // 3. Draw fibres/particles
-            const numFibresX = Math.floor(L / fibreSpacingX);
-            const numFibresY = Math.floor(2 * halfHeight / fibreSpacingY);
-            if (numFibresX <= 0 || numFibresY <= 0) {
-                updatePressureChart(0);
-                return;
-            }
-            // ... (fibre calculation is the same)
-            const cellWidth = L / numFibresX;
-            const maxRadius = (cellWidth / 2) * 0.9;
-            const radius = maxRadius * Math.sqrt(1 - phi);
+    // 3. Calculate the number of fibres required to fill the volume fraction
+    const preformArea = L * (2 * halfHeight);
+    const singleFibreArea = Math.PI * Math.pow(fibreRadius, 2);
+    
+    if (singleFibreArea <= 1e-12) { // Avoid division by zero for tiny fibres
+         if (!simState.isRunning) updatePressureChart(0);
+         return;
+    }
 
-            simCtx.fillStyle = '#6B7280'; // gray-500
-            const x_centers = Array.from({ length: numFibresX }, (_, i) => cellWidth / 2 + i * cellWidth);
-            const y_centers = Array.from({ length: numFibresY }, (_, i) => fibreSpacingY / 2 + i * fibreSpacingY);
+    let numFibresNeeded = Math.floor((preformArea * Vp) / singleFibreArea);
 
-            for (let i = 0; i < numFibresX; i++) {
-                for (let j = 0; j < numFibresY; j++) {
-                    // Add the preformStartX offset to center the fibres correctly
-                    const fibreDrawX = preformStartX + x_centers[i];
-                    const fibreDrawY = y_centers[j];
-                    
-                    simCtx.beginPath();
-                    simCtx.arc(fibreDrawX, fibreDrawY, radius, 0, 2 * Math.PI);
-                    simCtx.fill();
-                }
-            }
-            
-            updatePressureChart(0); // Reset pressure chart
+    // 4. *** SAFETY CAP ***: Prevent crashing by limiting the number of fibres drawn.
+    const MAX_FIBRES_TO_DRAW = 20000; // Cap at 10k fibres (e.g., a 100x100 grid)
+    if (numFibresNeeded > MAX_FIBRES_TO_DRAW) {
+        numFibresNeeded = MAX_FIBRES_TO_DRAW;
+        // Optional: Notify user that the cap has been hit
+        if (!simState.isRunning) {
+            elements.simulationTitle.textContent = "Visual fibre count capped for performance";
         }
-   
-   
+    } else {
+        if (!simState.isRunning) {
+            elements.simulationTitle.textContent = "Adjust sliders and press Start";
+        }
+    }
+    
+    if (numFibresNeeded === 0) return;
+
+    // 5. Arrange the required number of fibres in a uniform grid
+    const aspectRatio = L / (2 * halfHeight);
+    const num_rows = Math.max(1, Math.round(Math.sqrt(numFibresNeeded / aspectRatio)));
+    const num_cols = Math.max(1, Math.round(numFibresNeeded / num_rows));
+    
+    const actual_spacing_x = L / num_cols;
+    const actual_spacing_y = (2 * halfHeight) / num_rows;
+
+    // 6. Draw the fibres
+    simCtx.fillStyle = '#6B7280'; // gray-500
+    for (let i = 0; i < num_cols; i++) {
+        for (let j = 0; j < num_rows; j++) {
+            const fibreDrawX = preformStartX + actual_spacing_x / 2 + i * actual_spacing_x;
+            const fibreDrawY = actual_spacing_y / 2 + j * actual_spacing_y;
+
+            simCtx.beginPath();
+            simCtx.arc(fibreDrawX, fibreDrawY, fibreRadius, 0, 2 * Math.PI);
+            simCtx.fill();
+        }
+    }
+    
+    // Reset pressure chart when parameters change, but only if simulation isn't running
+    if (!simState.isRunning) {
+        updatePressureChart(0);
+    }
+}
+    
+    
 
         /**
          * Updates the pressure chart based on the flow front position.
