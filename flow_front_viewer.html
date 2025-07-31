@@ -123,12 +123,102 @@
             '03pas': [ { value: '20kpa', text: '0.02 MPa' } ]
         };
         
-        // --- DATA TABLE ---
-        const videoDataMap = {
-             '0.357-140um-20kpa-03pas': { timeStep: 0.1 },
-             '0.357-7um-50000kpa-200pas': { timeStep: 0.5 },
-             // Add all 4-part key combinations and their corresponding timeStep here...
-        };
+    // --- DATA TABLE ---
+    const videoDataMap = {
+        // vf = 0.256
+        '0.256-7um-20kpa-03pas': {timeStep: 0.225},
+        '0.256-7um-20kpa-10pas': {timeStep: 7.5},
+        '0.256-7um-20kpa-200pas': {timeStep: 150},
+        '0.256-7um-1000kpa-03pas': {timeStep: 0.0045},
+        '0.256-7um-1000kpa-10pas': {timeStep: 0.15},
+        '0.256-7um-1000kpa-200pas': {timeStep: 3},
+        '0.256-7um-50000kpa-03pas': {timeStep: 0.00009},
+        '0.256-7um-50000kpa-10pas': {timeStep: 0.003},
+        '0.256-7um-50000kpa-200pas': {timeStep: 0.06},
+
+        '0.256-30um-20kpa-03pas': {timeStep: 0.225},
+        '0.256-30um-20kpa-10pas': {timeStep: 7.5},
+        '0.256-30um-20kpa-200pas': {timeStep: 150},
+        '0.256-30um-1000kpa-03pas': {timeStep: 0.0045},
+        '0.256-30um-1000kpa-10pas': {timeStep: 0.15},
+        '0.256-30um-1000kpa-200pas': {timeStep: 3},
+        '0.256-30um-50000kpa-03pas': {timeStep: 0.00009},
+        '0.256-30um-50000kpa-10pas': {timeStep: 0.003},
+        '0.256-30um-50000kpa-200pas': {timeStep: 0.06},
+
+        '0.256-140um-20kpa-03pas': {timeStep: 0.225},
+        '0.256-140um-20kpa-10pas': {timeStep: 7.5},
+        '0.256-140um-20kpa-200pas': {timeStep: 150},
+        '0.256-140um-1000kpa-03pas': {timeStep: 0.0045},
+        '0.256-140um-1000kpa-10pas': {timeStep: 0.15},
+        '0.256-140um-1000kpa-200pas': {timeStep: 3},
+        '0.256-140um-50000kpa-03pas': {timeStep: 0.00009},
+        '0.256-140um-50000kpa-10pas': {timeStep: 0.003},
+        '0.256-140um-50000kpa-200pas': {timeStep: 0.06},
+
+        // vf = 0.357
+        '0.357-7um-20kpa-03pas': {timeStep: 0.75},
+        '0.357-7um-20kpa-10pas': {timeStep: 25},
+        '0.357-7um-20kpa-200pas': {timeStep: 500},
+        '0.357-7um-1000kpa-03pas': {timeStep: 0.015},
+        '0.357-7um-1000kpa-10pas': {timeStep: 0.5},
+        '0.357-7um-1000kpa-200pas': {timeStep: 10},
+        '0.357-7um-50000kpa-03pas': {timeStep: 0.0003},
+        '0.357-7um-50000kpa-10pas': {timeStep: 0.01},
+        '0.357-7um-50000kpa-200pas': {timeStep: 0.2},
+
+        '0.357-30um-20kpa-03pas': {timeStep: 0.75},
+        '0.357-30um-20kpa-10pas': {timeStep: 25},
+        '0.357-30um-20kpa-200pas': {timeStep: 500},
+        '0.357-30um-1000kpa-03pas': {timeStep: 0.015},
+        '0.357-30um-1000kpa-10pas': {timeStep: 0.5},
+        '0.357-30um-1000kpa-200pas': {timeStep: 10},
+        '0.357-30um-50000kpa-03pas': {timeStep: 0.0003},
+        '0.357-30um-50000kpa-10pas': {timeStep: 0.01},
+        '0.357-30um-50000kpa-200pas': {timeStep: 0.2},
+
+        '0.357-140um-20kpa-03pas': {timeStep: 0.75},
+        '0.357-140um-20kpa-10pas': {timeStep: 25},
+        '0.357-140um-20kpa-200pas': {timeStep: 500},
+        '0.357-140um-1000kpa-03pas': {timeStep: 0.015},
+        '0.357-140um-1000kpa-10pas': {timeStep: 0.5},
+        '0.357-140um-1000kpa-200pas': {timeStep: 10},
+        '0.357-140um-50000kpa-03pas': {timeStep: 0.0003},
+        '0.357-140um-50000kpa-10pas': {timeStep: 0.01},
+        '0.357-140um-50000kpa-200pas': {timeStep: 0.2},
+
+        // vf = 0.480
+        '0.480-7um-20kpa-03pas': {timeStep: 3},
+        '0.480-7um-20kpa-10pas': {timeStep: 100},
+        '0.480-7um-20kpa-200pas': {timeStep: 2000},
+        '0.480-7um-1000kpa-03pas': {timeStep: 0.06},
+        '0.480-7um-1000kpa-10pas': {timeStep: 2},
+        '0.480-7um-1000kpa-200pas': {timeStep: 40},
+        '0.480-7um-50000kpa-03pas': {timeStep: 0.0012},
+        '0.480-7um-50000kpa-10pas': {timeStep: 0.04},
+        '0.480-7um-50000kpa-200pas': {timeStep: 0.8},
+
+        '0.480-30um-20kpa-03pas': {timeStep: 3},
+        '0.480-30um-20kpa-10pas': {timeStep: 100},
+        '0.480-30um-20kpa-200pas': {timeStep: 2000},
+        '0.480-30um-1000kpa-03pas': {timeStep: 0.06},
+        '0.480-30um-1000kpa-10pas': {timeStep: 2},
+        '0.480-30um-1000kpa-200pas': {timeStep: 40},
+        '0.480-30um-50000kpa-03pas': {timeStep: 0.0012},
+        '0.480-30um-50000kpa-10pas': {timeStep: 0.04},
+        '0.480-30um-50000kpa-200pas': {timeStep: 0.8},
+
+        '0.480-140um-20kpa-03pas': {timeStep: 3},
+        '0.480-140um-20kpa-10pas': {timeStep: 100},
+        '0.480-140um-20kpa-200pas': {timeStep: 2000},
+        '0.480-140um-1000kpa-03pas': {timeStep: 0.06},
+        '0.480-140um-1000kpa-10pas': {timeStep: 2},
+        '0.480-140um-1000kpa-200pas': {timeStep: 40},
+        '0.480-140um-50000kpa-03pas': {timeStep: 0.0012},
+        '0.480-140um-50000kpa-10pas': {timeStep: 0.04},
+        '0.480-140um-50000kpa-200pas': {timeStep: 0.8},
+    };
+
 
         // --- DOM ELEMENTS ---
         const porositySlider = document.getElementById('porositySlider');
